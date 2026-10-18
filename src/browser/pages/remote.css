@@ -853,9 +853,101 @@ body {
   font-size: 0.8rem;
 }
 
+/* Quick Entry Point: folder the chosen mode starts in. */
+.modes:has(+ .entries) {
+  padding-bottom: 12px;
+}
+
+.entries {
+  border-top: 1px solid var(--l-line);
+  padding-bottom: 20px;
+}
+
+.entries h3 {
+  color: var(--l-text-2);
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.entry-list {
+  display: grid;
+  gap: 6px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.entry {
+  align-items: center;
+  background: var(--l-bg);
+  border: 1px solid var(--l-line);
+  border-radius: 10px;
+  color: var(--l-text);
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+}
+
+.entry:has(:checked) {
+  border-color: var(--primary);
+}
+
+.entry input {
+  accent-color: var(--primary);
+  flex: none;
+  margin: 0;
+}
+
+.entry span {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 32px;
+  min-width: 0;
+}
+
+.entry b {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.entry small {
+  color: var(--l-text-2);
+  font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.entry .icon-btn {
+  color: var(--l-text-3);
+  flex: none;
+}
+
+.entry .icon-btn:hover {
+  color: var(--danger);
+}
+
+.entry-form {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) auto;
+  margin-top: 8px;
+}
+
 /* Full-screen SSH shell. */
 .shell {
-  background: #1e1e1e;
+  /* VS Code Dark Modern colors. */
+  --primary: #0078d4;
+  --text: #cccccc;
+  --text-2: #cccccc;
+  --text-3: #9d9d9d;
+  --line: #2b2b2b;
+  background: #181818;
+  color: var(--text);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -872,7 +964,7 @@ body {
 
 /* iOS's translucent keyboard accessory bar shows what's behind the shell. */
 body:has(> .shell:not([hidden])) {
-  background: #000;
+  background: #181818;
 }
 
 body:has(> .shell:not([hidden])) > :not(.shell) {
@@ -881,7 +973,8 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 
 .shell-head {
   align-items: center;
-  background: rgba(44, 44, 44, 0.92);
+  background: #1f1f1f;
+  border-bottom: 1px solid var(--line);
   display: flex;
   font-size: 0.875rem;
   height: 40px;
@@ -897,7 +990,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 }
 
 .keys {
-  background: rgba(44, 44, 44, 0.92);
+  background: #1f1f1f;
   display: none;
   gap: 6px;
   overflow-x: auto;
@@ -915,7 +1008,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
-  background: rgba(255, 255, 255, 0.08);
+  background: #313131;
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--text);
@@ -929,12 +1022,13 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 }
 
 .keys button:active {
-  background: rgba(255, 255, 255, 0.2);
+  background: #3c3c3c;
 }
 
 .keys button[aria-pressed="true"] {
   background: var(--primary);
   border-color: var(--primary);
+  color: #fff;
 }
 
 /* A dot marks keys with a long-press menu. */
@@ -962,7 +1056,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 }
 
 .ghost {
-  color: rgba(255, 255, 255, 0.35);
+  color: #6e7681;
   font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace;
   font-size: 14px;
   overflow: hidden;
@@ -1002,7 +1096,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 .kbd {
   -webkit-user-select: none;
   user-select: none;
-  background: rgba(44, 44, 44, 0.92);
+  background: #1f1f1f;
   flex-direction: column;
   gap: 6px;
   padding: 2px 3px calc(6px + env(safe-area-inset-bottom));
@@ -1031,7 +1125,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 
 .kbd button {
   -webkit-touch-callout: none;
-  background: rgba(255, 255, 255, 0.14);
+  background: #3c3c3c;
   border: 0;
   border-radius: 6px;
   color: var(--text);
@@ -1046,7 +1140,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 }
 
 .kbd button:is([data-k="shift"], [data-k="bksp"], [data-k="?123"], [data-k="ABC"], [data-k="lang"], [data-k="enter"]) {
-  background: rgba(255, 255, 255, 0.07);
+  background: #2b2b2b;
   flex-grow: 1.5;
   font-size: 0.9rem;
 }
@@ -1056,11 +1150,12 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 }
 
 .kbd button.down {
-  background: rgba(255, 255, 255, 0.35);
+  background: #505050;
 }
 
 .kbd button[aria-pressed="true"] {
   background: var(--primary);
+  color: #fff;
 }
 
 .shell-actions {

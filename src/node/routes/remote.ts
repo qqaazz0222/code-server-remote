@@ -35,6 +35,13 @@ export interface RemoteServer {
   password?: string
   folder?: string
   group?: string
+  entries?: EntryPoint[]
+}
+
+/** A named folder to start in, picked when opening a server. */
+export interface EntryPoint {
+  name: string
+  path: string
 }
 
 interface Session {
@@ -42,6 +49,8 @@ interface Session {
   port: number
   ready: Promise<void>
   log: string[]
+  /** Remote $HOME, for expanding ~ in ?folder=. */
+  home?: string
 }
 
 // Always present: SSH into this machine. Account and password are asked on connect.
@@ -105,7 +114,23 @@ export function parseServer(body: any, existing?: RemoteServer): RemoteServer {
     password: password || undefined,
     folder: str(body?.folder) || undefined,
     group: str(body?.group).slice(0, 40) || undefined,
+    entries: existing?.entries,
   }
+}
+
+/** Validate entry points; the path ends up quoted in a remote shell command. */
+export function parseEntries(body: any): EntryPoint[] {
+  if (!Array.isArray(body?.entries) || body.entries.length > 50) {
+    throw new HttpError("Invalid entry points", HttpCode.BadRequest)
+  }
+  return body.entries.map((e: any) => {
+    const name = typeof e?.name === "string" ? e.name.trim() : ""
+    const path = typeof e?.path === "string" ? e.path.trim() : ""
+    if (!name || name.length > 40 || !path || path.length > 1024 || /[\0\n\r]/.test(path)) {
+      throw new HttpError("Invalid entry point", HttpCode.BadRequest)
+    }
+    return { name, path }
+  })
 }
 
 /** Shell script run on the remote via `sh -s`. */
@@ -126,6 +151,7 @@ if [ ! -e "$SETTINGS" ]; then
   mkdir -p "$(dirname "$SETTINGS")"
   echo '{ "workbench.colorTheme": "Default Dark Modern" }' > "$SETTINGS"
 fi
+echo "CS_REMOTE_HOME=$HOME"
 rm -f '${socket}'
 exec "$CS" --auth none --socket '${socket}' --socket-mode 600 --disable-update-check
 `
@@ -231,9 +257,13 @@ async function status(server: RemoteServer): Promise<{ online: boolean | null; m
   return { online: ms !== undefined, ms }
 }
 
-/** Login shell on the remote, starting in the server's folder if set. */
+/** Login shell on the remote, starting in the given folder if set. */
 export function shellCommand(folder?: string): string | undefined {
-  return folder && `cd '${folder.replace(/'/g, "'\\''")}' && exec "$SHELL" -l`
+  if (!folder) return undefined
+  // A leading ~ stays outside the quotes so the remote shell expands it. A missing
+  // folder prints an error and the shell opens in $HOME instead of exiting.
+  const [, home, rest] = /^(~(?:\/|$))?([\s\S]*)$/.exec(folder)!
+  return `cd ${home ? '"$HOME"/' : ""}'${rest.replace(/'/g, "'\\''")}'; exec "$SHELL" -l`
 }
 
 /** Credentials typed on the launcher apply to this connection only (not saved). */
@@ -253,8 +283,10 @@ async function connect(req: Request, server: RemoteServer): Promise<Session> {
   }
 
   const port = await freePort()
-  // The id is random hex so this is safe to put in the script unescaped.
-  const socket = `/tmp/code-server-remote-${server.id}.sock`
+  // Per instance, so two launchers (e.g. test and production) on one host don't
+  // replace each other's remote code-server. Hex only, so safe unescaped.
+  const instance = crypto.createHash("sha1").update(req.args["user-data-dir"]).digest("hex").slice(0, 8)
+  const socket = `/tmp/code-server-remote-${instance}-${server.id}.sock`
   const { args, env } = await sshCommand(
     req,
     server,
@@ -267,13 +299,12 @@ async function connect(req: Request, server: RemoteServer): Promise<Session> {
   proc.stdin!.end(remoteScript(socket))
 
   const log: string[] = []
+  let home: string | undefined
   const onData = (data: Buffer) => {
-    log.push(
-      ...data
-        .toString()
-        .split(/\r?\n|\r/)
-        .filter(Boolean),
-    )
+    for (const line of data.toString().split(/\r?\n|\r/)) {
+      if (line.startsWith("CS_REMOTE_HOME=")) home = line.slice("CS_REMOTE_HOME=".length)
+      else if (line) log.push(line)
+    }
     log.splice(0, Math.max(0, log.length - 50))
   }
   proc.stdout!.on("data", onData)
@@ -303,7 +334,15 @@ async function connect(req: Request, server: RemoteServer): Promise<Session> {
     }
   })()
 
-  const session = { proc, port, ready, log }
+  const session: Session = {
+    proc,
+    port,
+    ready,
+    log,
+    get home() {
+      return home
+    },
+  }
   sessions.set(server.id, session)
   return session
 }
@@ -357,6 +396,16 @@ router.put("/remote-servers/:id", async (req, res) => {
     servers.map((s) => (s.id === server.id ? server : s)),
   )
   res.json({ id: server.id })
+})
+
+router.put("/remote-servers/:id/entries", async (req, res) => {
+  const entries = parseEntries(req.body)
+  const server = await getServer(req)
+  await writeServers(
+    req,
+    (await readServers(req)).map((s) => (s.id === server.id ? { ...s, entries } : s)),
+  )
+  res.json({ entries })
 })
 
 router.delete("/remote-servers/:id", async (req, res) => {
@@ -463,6 +512,13 @@ export async function proxy(req: Request, res: Response): Promise<void> {
     // Not connected (yet); the launcher connects and comes back.
     return redirect(req, res, "/", { connect: req.params.id })
   }
+  // The remote code-server doesn't expand ~ in ?folder=.
+  const folder = req.query.folder
+  if (!req.params.path && typeof folder === "string" && /^~(\/|$)/.test(folder) && session.home) {
+    const params = new URLSearchParams(query)
+    params.set("folder", session.home + folder.slice(1))
+    return res.redirect(`${pathname.endsWith("/") ? "./" : req.params.id + "/"}?${params}`)
+  }
   // Relative URLs only work with the trailing slash.
   if (!req.params.path && !pathname.endsWith("/")) {
     return res.redirect(`${req.params.id}/${query ? "?" + query : ""}`)
@@ -509,7 +565,8 @@ export async function wsShell(req: WebsocketRequest): Promise<void> {
         }
         started = true
         const server = withCredentials(saved, msg)
-        const { args, env } = await sshCommand(req, server, ["-t"], shellCommand(server.folder))
+        const folder = typeof msg.folder === "string" && msg.folder.trim() ? msg.folder.trim() : server.folder
+        const { args, env } = await sshCommand(req, server, ["-t"], shellCommand(folder))
         const { spawn } = require(path.join(vsRootPath, "node_modules/node-pty"))
         logger.info(`Opening shell on remote server ${server.name} (${server.host})`)
         pty = spawn("ssh", args, { name: "xterm-256color", cols: msg.cols || 80, rows: msg.rows || 24, env }) as Pty

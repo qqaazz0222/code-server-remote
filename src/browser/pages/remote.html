@@ -14,7 +14,7 @@
     <link rel="manifest" href="{{BASE}}/manifest.json" crossorigin="use-credentials" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
-    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=8" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=10" rel="stylesheet" />
     <!-- Shipped with VS Code; used by the SSH shell. -->
     <link href="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/css/xterm.css" rel="stylesheet" />
     <script defer src="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -153,6 +153,16 @@
           </svg>
           <span><b>SSH Shell</b><small>Open a terminal on the host</small></span>
         </button>
+      </div>
+      <!-- Folder the chosen mode starts in. -->
+      <div class="sheet-body entries">
+        <h3>Quick Entry Point</h3>
+        <div id="entry-list" class="entry-list" role="radiogroup" aria-label="Quick Entry Point"></div>
+        <form id="entry-form" class="entry-form">
+          <input class="field" name="name" placeholder="Alias" maxlength="40" required aria-label="Alias" />
+          <input class="field" name="path" placeholder="~/project" maxlength="1024" required aria-label="Path" />
+          <button type="submit" class="btn">Add</button>
+        </form>
       </div>
     </dialog>
 
@@ -597,20 +607,61 @@
         if (connecting) return
         const modeDialog = $("mode-dialog")
         $("mode-title").textContent = `Open ${s.name}`
+        // Default starts in the server's folder, else home. The last pick is remembered.
+        const entryKey = "entry-" + s.id
+        const entries = () => [{ name: "Default", path: s.folder || "~/" }, ...(s.entries || [])]
+        let picked = storage(entryKey)
+        const pick = (path) => storage(entryKey, (picked = path))
+        const drawEntries = () => {
+          if (!entries().some((e) => e.path === picked)) picked = entries()[0].path
+          $("entry-list").replaceChildren(
+            ...entries().map((e, i) => {
+              const row = el("label", "entry")
+              const radio = el("input")
+              radio.type = "radio"
+              radio.name = "entry"
+              radio.checked = e.path === picked
+              radio.onchange = () => pick(e.path)
+              const text = el("span")
+              text.append(el("b", "", e.name), el("small", "", e.path))
+              row.append(radio, text)
+              if (i) row.append(iconButton("trash", `Remove ${e.name}`, () => saveEntries(s.entries.filter((x) => x !== e))))
+              return row
+            }),
+          )
+        }
+        const saveEntries = async (list) => {
+          try {
+            s.entries = (await request("PUT", `${api}/${s.id}/entries`, { entries: list })).entries
+            drawEntries()
+          } catch (error) {
+            toast(`Failed to save entry points: ${error.message}`, true)
+          }
+        }
+        const entryForm = $("entry-form")
+        entryForm.reset()
+        entryForm.onsubmit = (e) => {
+          e.preventDefault()
+          const entry = Object.fromEntries(new FormData(entryForm))
+          entryForm.reset()
+          pick(entry.path.trim())
+          saveEntries([...(s.entries || []), entry])
+        }
+        drawEntries()
         modeDialog.querySelectorAll("[data-mode]").forEach(
           (b) =>
             (b.onclick = () => {
               modeDialog.close()
-              connect(s, b.dataset.mode)
+              connect(s, b.dataset.mode, picked)
             }),
         )
         modeDialog.showModal()
       }
 
       // Ask for account and password unless the server has saved credentials.
-      const connect = (s, mode = "code") => {
+      const connect = (s, mode = "code", folder = s.folder) => {
         if (connecting) return
-        const go = mode === "shell" ? shell : start
+        const go = mode === "shell" ? (s, creds) => shell(s, creds, folder) : (s, creds) => start(s, creds, folder)
         if ((mode === "code" && s.connected) || s.hasPassword || s.identityFile) return go(s)
         loginForm.reset()
         loginForm.user.value = s.user || ""
@@ -626,8 +677,8 @@
         ;(s.user ? loginForm.password : loginForm.user).focus()
       }
 
-      const start = async (s, creds) => {
-        const url = `${base}/remote/${s.id}/` + (s.folder ? "?folder=" + encodeURIComponent(s.folder) : "")
+      const start = async (s, creds, folder) => {
+        const url = `${base}/remote/${s.id}/` + (folder ? "?folder=" + encodeURIComponent(folder) : "")
         if (s.connected) return (location.href = url)
         connecting = { id: s.id, cancelled: false }
         $("progress-title").textContent = `Connecting to ${s.name}`
@@ -809,7 +860,7 @@
       const EN = "qwertyuiopasdfghjklzxcvbnmqwertop"
 
       let closeShell = () => {}
-      const shell = (s, creds = {}) => {
+      const shell = (s, creds = {}, folder) => {
         closeShell()
         $("shell-title").textContent = s.name
         $("shell").hidden = false
@@ -819,7 +870,29 @@
           fontFamily: 'Menlo, Consolas, "DejaVu Sans Mono", monospace',
           fontSize: 14,
           lineHeight: 1.2,
-          theme: { background: "#1e1e1e" },
+          // VS Code Dark Modern terminal colors.
+          theme: {
+            background: "#181818",
+            foreground: "#cccccc",
+            cursor: "#aeafad",
+            selectionBackground: "#264f78",
+            black: "#000000",
+            red: "#cd3131",
+            green: "#0dbc79",
+            yellow: "#e5e510",
+            blue: "#2472c8",
+            magenta: "#bc3fbc",
+            cyan: "#11a8cd",
+            white: "#e5e5e5",
+            brightBlack: "#666666",
+            brightRed: "#f14c4c",
+            brightGreen: "#23d18b",
+            brightYellow: "#f5f543",
+            brightBlue: "#3b8eea",
+            brightMagenta: "#d670d6",
+            brightCyan: "#29b8db",
+            brightWhite: "#e5e5e5",
+          },
         })
         term.open(box)
         const url = new URL(`${base}/remote-shell/${s.id}`, location.href)
@@ -1078,7 +1151,7 @@
         ws.onopen = () => {
           fit()
           // The first message logs in; credentials are not saved.
-          ws.send(JSON.stringify({ ...creds, cols: term.cols, rows: term.rows }))
+          ws.send(JSON.stringify({ ...creds, folder, cols: term.cols, rows: term.rows }))
           opened = true
         }
         ws.onmessage = (e) => term.write(e.data, showHints)

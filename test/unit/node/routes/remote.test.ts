@@ -3,7 +3,7 @@ import * as fs from "fs"
 import * as net from "net"
 import * as os from "os"
 import * as path from "path"
-import { parseServer, probe, shellCommand } from "../../../../src/node/routes/remote"
+import { parseEntries, parseServer, probe, shellCommand } from "../../../../src/node/routes/remote"
 import * as httpserver from "../../../utils/httpserver"
 import * as integration from "../../../utils/integration"
 
@@ -25,6 +25,15 @@ describe("remote servers", () => {
     expect(parseServer({ host: "x", clearPassword: true }, s).password).toBeUndefined()
     expect(parseServer({ host: "x", group: " Lab " }).group).toBe("Lab")
     expect(parseServer({ host: "x", group: "" }).group).toBeUndefined()
+    // Edits from the server form keep the entry points.
+    expect(parseServer({ host: "x" }, { ...s, entries: [{ name: "a", path: "/a" }] }).entries).toHaveLength(1)
+  })
+
+  it("should validate entry points", () => {
+    expect(parseEntries({ entries: [{ name: " src ", path: " ~/src " }] })).toEqual([{ name: "src", path: "~/src" }])
+    expect(() => parseEntries({})).toThrow("Invalid entry points")
+    expect(() => parseEntries({ entries: [{ name: "", path: "/a" }] })).toThrow("Invalid entry point")
+    expect(() => parseEntries({ entries: [{ name: "a", path: "/a\nrm -rf ~" }] })).toThrow("Invalid entry point")
   })
 
   it("should quote the shell folder", () => {
@@ -36,6 +45,15 @@ describe("remote servers", () => {
       encoding: "utf8",
     })
     expect(out.trim()).toBe(folder)
+    // ~ expands on the remote; the rest stays quoted.
+    const home = path.dirname(folder)
+    const run = (f: string) =>
+      execFileSync("sh", ["-c", shellCommand(f)!.replace('exec "$SHELL" -l', "pwd")], {
+        encoding: "utf8",
+        env: { ...process.env, HOME: home },
+      }).trim()
+    expect(run("~")).toBe(home)
+    expect(run("~/it's $(x)")).toBe(folder)
   })
 
   it("should probe TCP ports", async () => {
@@ -74,6 +92,14 @@ describe("remote servers", () => {
     expect(resp.status).toBe(200)
     resp = await json("GET", "/remote-servers")
     expect((await resp.json())[1]).toMatchObject({ name: "box2", user: "me", hasPassword: true })
+
+    resp = await json("PUT", `/remote-servers/${id}/entries`, { entries: [{ name: "src", path: "~/src" }] })
+    expect(resp.status).toBe(200)
+    resp = await json("PUT", `/remote-servers/${id}/entries`, { entries: [{ name: "", path: "x" }] })
+    expect(resp.status).toBe(400)
+    resp = await json("PUT", `/remote-servers/${id}`, { name: "box2", host: "box.local", user: "me" })
+    resp = await json("GET", "/remote-servers")
+    expect((await resp.json())[1].entries).toEqual([{ name: "src", path: "~/src" }])
 
     resp = await json("GET", "/remote-servers/status")
     const status = await resp.json()
