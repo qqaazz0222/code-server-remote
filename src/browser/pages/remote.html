@@ -9,12 +9,13 @@
     />
     <meta name="color-scheme" content="dark" />
     <title>Servers</title>
-    <link rel="icon" href="{{CS_STATIC_BASE}}/src/browser/media/favicon-dark-support.svg" />
-    <link rel="alternate icon" href="{{CS_STATIC_BASE}}/src/browser/media/favicon.ico" />
+    <link rel="icon" href="{{CS_STATIC_BASE}}/src/images/{{LOGO}}.svg" />
+    <link rel="apple-touch-icon" sizes="192x192" href="{{CS_STATIC_BASE}}/src/images/{{LOGO}}-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="{{CS_STATIC_BASE}}/src/images/{{LOGO}}-512.png" />
     <link rel="manifest" href="{{BASE}}/manifest.json" crossorigin="use-credentials" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
-    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=10" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=11" rel="stylesheet" />
     <!-- Shipped with VS Code; used by the SSH shell. -->
     <link href="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/css/xterm.css" rel="stylesheet" />
     <script defer src="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -22,7 +23,7 @@
   <body>
     <header class="topbar">
       <div class="brand">
-        <img class="logo-mark" src="{{CS_STATIC_BASE}}/src/browser/media/favicon.svg" alt="" />
+        <img src="{{CS_STATIC_BASE}}/src/images/{{LOGO}}.svg" alt="" />
         <span>code-server</span>
       </div>
       <a class="icon-btn" href="{{BASE}}/logout" title="Log out" aria-label="Log out">
@@ -95,14 +96,6 @@
             <span><i class="sw up"></i>↑ Up <b id="net-up">–</b></span>
             <span><i class="sw down"></i>↓ Down <b id="net-down">–</b></span>
           </div>
-        </section>
-
-        <section class="widget">
-          <div class="w-head">
-            <h2>Connections</h2>
-            <span id="session-count" class="w-meta"></span>
-          </div>
-          <ul id="sessions" class="sessions"></ul>
         </section>
       </aside>
 
@@ -397,20 +390,6 @@
         load()
       }
 
-      const renderSessions = () => {
-        const connected = servers.filter((s) => s.connected)
-        $("session-count").textContent = `${connected.length} active`
-        const ul = $("sessions")
-        ul.replaceChildren()
-        if (!connected.length) ul.append(el("li", "none", "No active connections"))
-        for (const s of connected) {
-          const li = el("li")
-          li.append(el("span", "dot"), el("span", "name", s.name))
-          li.append(iconButton("plug", `Disconnect ${s.name}`, () => disconnect(s)))
-          ul.append(li)
-        }
-      }
-
       const render = () => {
         const q = $("search").value.trim().toLowerCase()
         const shown = servers.filter(
@@ -472,7 +451,6 @@
           byGroup.get(key).push(li)
         }
         renderGroups(byGroup, !!q)
-        renderSessions()
       }
 
       // Ungrouped first, then groups by name. Sections appear once any group exists.

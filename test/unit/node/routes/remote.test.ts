@@ -85,7 +85,7 @@ describe("remote servers", () => {
 
     resp = await json("GET", "/remote-servers")
     const list = await resp.json()
-    expect(list[0]).toMatchObject({ id: "local", name: "This computer", host: "127.0.0.1" })
+    expect(list[0]).toMatchObject({ id: "local", name: "This computer", host: "127.0.0.1", group: "Local" })
     expect(list[1]).toEqual({ id, name: "box", host: "box.local", hasPassword: true, connected: false })
 
     resp = await json("PUT", `/remote-servers/${id}`, { name: "box2", host: "box.local", user: "me" })

@@ -185,22 +185,13 @@ router.get("/manifest.json", async (req, res) => {
           display: "fullscreen",
           display_override: ["window-controls-overlay"],
           description: "Run Code on a remote server.",
-          icons: [192, 512]
-            .map((size) => [
-              {
-                src: `{{BASE}}/_static/src/browser/media/pwa-icon-${size}.png`,
-                type: "image/png",
-                sizes: `${size}x${size}`,
-                purpose: "any",
-              },
-              {
-                src: `{{BASE}}/_static/src/browser/media/pwa-icon-maskable-${size}.png`,
-                type: "image/png",
-                sizes: `${size}x${size}`,
-                purpose: "maskable",
-              },
-            ])
-            .flat(),
+          // The logo already has its own rounded tile, so there's no maskable variant.
+          icons: [192, 512].map((size) => ({
+            src: `{{BASE}}/_static/src/images/{{LOGO}}-${size}.png`,
+            type: "image/png",
+            sizes: `${size}x${size}`,
+            purpose: "any",
+          })),
         },
         null,
         2,

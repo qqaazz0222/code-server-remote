@@ -7,7 +7,7 @@ import { Disposable } from "../common/emitter"
 import { HttpCode, HttpError } from "../common/http"
 import { normalize } from "../common/util"
 import { AuthType, DefaultedArgs } from "./cli"
-import { version as codeServerVersion } from "./constants"
+import { version as codeServerVersion, isDevMode } from "./constants"
 import { Heart } from "./heart"
 import { CoderSettings, SettingsProvider } from "./settings"
 import { UpdateProvider } from "./update"
@@ -72,6 +72,8 @@ export const replaceTemplates = <T extends object>(
     .replace(/{{TO}}/g, (typeof req.query.to === "string" && escapeHtml(req.query.to)) || "/")
     .replace(/{{BASE}}/g, serverOptions.base)
     .replace(/{{CS_STATIC_BASE}}/g, serverOptions.csStaticBase)
+    // Source builds (test instance) get the dev logo.
+    .replace(/{{LOGO}}/g, isDevMode ? "code-server-remote-dev" : "code-server-remote")
     .replace("{{OPTIONS}}", () => escapeJSON(serverOptions))
 }
 

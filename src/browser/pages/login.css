@@ -32,21 +32,12 @@
   max-width: 300px;
 }
 
+/* The logo is its own rounded tile. */
 .logo-tile {
-  align-items: center;
-  background: linear-gradient(145deg, #f7f7f8, #e6e6ea);
-  border-radius: 24px;
-  display: flex;
   flex: none;
   height: 136px;
-  justify-content: center;
   margin: 44px 52px 0 0;
   width: 136px;
-}
-
-.logo-tile img {
-  height: 72px;
-  width: 72px;
 }
 
 .login-form {
@@ -125,14 +116,8 @@
   }
 
   .logo-tile {
-    border-radius: 16px;
     height: 72px;
     margin: 0;
     width: 72px;
-  }
-
-  .logo-tile img {
-    height: 40px;
-    width: 40px;
   }
 }

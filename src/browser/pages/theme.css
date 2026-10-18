@@ -185,8 +185,3 @@ body {
     animation-duration: 3s;
   }
 }
-
-/* The code-server mark is black; flip it on dark backgrounds. */
-.logo-mark {
-  filter: invert(1);
-}

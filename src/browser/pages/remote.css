@@ -295,33 +295,6 @@ body {
   width: calc(var(--p) * 100%);
 }
 
-.sessions {
-  display: grid;
-  gap: 4px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.sessions li {
-  align-items: center;
-  display: flex;
-  font-size: 0.875rem;
-  gap: 10px;
-  min-height: 32px;
-}
-
-.sessions .name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sessions .none {
-  color: var(--text-3);
-}
-
 .dot {
   background: var(--success);
   border-radius: 50%;
@@ -592,14 +565,12 @@ body {
   }
 }
 
-.tile-actions .icon-btn,
-.sessions .icon-btn {
+.tile-actions .icon-btn {
   height: 28px;
   width: 28px;
 }
 
-.tile-actions .icon-btn svg,
-.sessions .icon-btn svg {
+.tile-actions .icon-btn svg {
   height: 15px;
   width: 15px;
 }
@@ -793,6 +764,11 @@ body {
   .page {
     grid-template-columns: minmax(0, 1fr);
     padding: 16px;
+  }
+
+  /* Servers before the widgets in the single column. */
+  .main {
+    order: -1;
   }
 
   .side {

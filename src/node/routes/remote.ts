@@ -54,7 +54,7 @@ interface Session {
 }
 
 // Always present: SSH into this machine. Account and password are asked on connect.
-const DEFAULT_SERVER: RemoteServer = { id: "local", name: "This computer", host: "127.0.0.1" }
+const DEFAULT_SERVER: RemoteServer = { id: "local", name: "This computer", host: "127.0.0.1", group: "Local" }
 
 const sessions = new Map<string, Session>()
 

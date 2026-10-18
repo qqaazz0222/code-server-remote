@@ -12,11 +12,10 @@
     />
     <meta name="color-scheme" content="light dark" />
     <title>{{ERROR_TITLE}} - {{APP_NAME}}</title>
-    <link rel="icon" href="{{CS_STATIC_BASE}}/src/browser/media/favicon-dark-support.svg" />
-    <link rel="alternate icon" href="{{CS_STATIC_BASE}}/src/browser/media/favicon.ico" />
+    <link rel="icon" href="{{CS_STATIC_BASE}}/src/images/{{LOGO}}.svg" />
     <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
-    <link rel="apple-touch-icon" sizes="192x192" href="{{CS_STATIC_BASE}}/src/browser/media/pwa-icon-192.png" />
-    <link rel="apple-touch-icon" sizes="512x512" href="{{CS_STATIC_BASE}}/src/browser/media/pwa-icon-512.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="{{CS_STATIC_BASE}}/src/images/{{LOGO}}-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="{{CS_STATIC_BASE}}/src/images/{{LOGO}}-512.png" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/error.css" rel="stylesheet" />
@@ -30,7 +29,7 @@
             <h2 class="header">{{ERROR_HEADER}}</h2>
             <div class="body">{{ERROR_BODY}}</div>
           </div>
-          <div class="logo-tile"><img src="{{CS_STATIC_BASE}}/src/browser/media/favicon.svg" alt="" /></div>
+          <img class="logo-tile" src="{{CS_STATIC_BASE}}/src/images/{{LOGO}}.svg" alt="" />
         </div>
         <div class="links">
           <a class="btn round" href="{{BASE}}{{TO}}" title="Go home" aria-label="Go home">
