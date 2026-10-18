@@ -3,7 +3,17 @@ import * as fs from "fs"
 import * as net from "net"
 import * as os from "os"
 import * as path from "path"
-import { listCommand, parseEntries, parseListing, parseServer, probe, readCommand, shellCommand } from "../../../../src/node/routes/remote"
+import {
+  listCommand,
+  parseEntries,
+  parseListing,
+  parseServer,
+  probe,
+  readCommand,
+  removeCommand,
+  shellCommand,
+  writeCommand,
+} from "../../../../src/node/routes/remote"
 import * as httpserver from "../../../utils/httpserver"
 import * as integration from "../../../utils/integration"
 
@@ -79,6 +89,41 @@ describe("remote servers", () => {
     // Missing paths and folders exit 3, which the routes report as 404.
     expect(() => sh(listCommand("~/missing"))).toThrow(expect.objectContaining({ status: 3 }))
     expect(() => sh(readCommand(path.join(dir, "sub")))).toThrow(expect.objectContaining({ status: 3 }))
+  })
+
+  it("should write and delete remote files", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "files-"))
+    const sh = (cmd: string, input?: string) =>
+      execFileSync("sh", ["-c", cmd], { encoding: "utf8", input, env: { ...process.env, HOME: home } })
+    const status = (cmd: string) => {
+      try {
+        sh(cmd)
+        return 0
+      } catch (error: any) {
+        return error.status
+      }
+    }
+
+    sh(writeCommand("~/it's.txt"), "one")
+    expect(fs.readFileSync(path.join(home, "it's.txt"), "utf8")).toBe("one")
+    // Existing files need overwrite; nothing temporary is left behind.
+    expect(status(writeCommand("~/it's.txt"))).toBe(4)
+    sh(writeCommand("~/it's.txt", true), "two")
+    expect(fs.readFileSync(path.join(home, "it's.txt"), "utf8")).toBe("two")
+    expect(fs.readdirSync(home)).toEqual(["it's.txt"])
+    expect(status(writeCommand("~/missing/a.txt"))).toBe(3)
+
+    fs.mkdirSync(path.join(home, "dir/sub"), { recursive: true })
+    sh(removeCommand("~/dir"))
+    sh(removeCommand("~/it's.txt"))
+    expect(fs.readdirSync(home)).toEqual([])
+    expect(status(removeCommand("~/gone"))).toBe(3)
+    // Never / or the home folder, however it's spelled.
+    expect(status(removeCommand("~"))).toBe(5)
+    expect(status(removeCommand(home + "/."))).toBe(5)
+    // Checked with rm swapped for echo, so a broken guard can't wipe anything.
+    expect(status(removeCommand("/").replace("rm -rf", "echo rm -rf"))).toBe(5)
+    expect(fs.existsSync(home)).toBe(true)
   })
 
   it("should probe TCP ports", async () => {

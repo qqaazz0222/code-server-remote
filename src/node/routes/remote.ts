@@ -525,12 +525,18 @@ function filesPath(q: unknown): string {
 
 // Exit codes from the remote commands below; 255 is ssh itself failing.
 const NOT_FOUND = 3
+const EXISTS = 4
+const PROTECTED = 5
 const filesError = (code: number | null, stderr: string): HttpError =>
   code === 255
     ? new HttpError("Not signed in to this server", HttpCode.Unauthorized)
     : code === NOT_FOUND
       ? new HttpError("Not found or no permission", HttpCode.NotFound)
-      : new HttpError(stderr.trim().split("\n").pop() || `Failed (exit ${code})`, HttpCode.ServerError)
+      : code === EXISTS
+        ? new HttpError("A file with that name already exists", HttpCode.Conflict)
+        : code === PROTECTED
+          ? new HttpError("Refusing to delete / or the home folder", HttpCode.Forbidden)
+          : new HttpError(stderr.trim().split("\n").pop() || `Failed (exit ${code})`, HttpCode.ServerError)
 
 async function filesRun(req: Request, server: RemoteServer, command: string) {
   const { args, env } = await sshCommand(req, server, filesArgs(req, server, false), command)
@@ -554,6 +560,28 @@ export const listCommand = (p: string) =>
 /** Remote command printing a file, or its first `max` bytes. */
 export const readCommand = (p: string, max = 0) =>
   `[ -f ${quotePath(p)} ] || exit ${NOT_FOUND}; ${max > 0 ? `head -c ${max}` : "cat"} -- ${quotePath(p)}`
+
+/**
+ * Remote command writing stdin to a file. It goes to a temporary name first so
+ * an interrupted upload never leaves a half-written file in place.
+ */
+export const writeCommand = (p: string, overwrite = false) => {
+  const tmp = quotePath(p + ".cs-upload")
+  return (
+    `[ -d "$(dirname -- ${quotePath(p)})" ] || exit ${NOT_FOUND}; ` +
+    (overwrite ? "" : `[ -e ${quotePath(p)} ] && exit ${EXISTS}; `) +
+    `cat > ${tmp} && mv -f -- ${tmp} ${quotePath(p)} || { rm -f -- ${tmp}; exit 1; }`
+  )
+}
+
+/** Remote command deleting a file or a whole folder, but never / or $HOME. */
+export const removeCommand = (p: string) => {
+  const q = quotePath(p)
+  return (
+    `{ [ -e ${q} ] || [ -L ${q} ]; } || exit ${NOT_FOUND}; r="$(realpath -- ${q})"; ` +
+    `{ [ "$r" = / ] || [ "$r" = "$(realpath -- "$HOME")" ]; } && exit ${PROTECTED}; rm -rf -- ${q}`
+  )
+}
 
 export interface FileEntry {
   name: string
@@ -613,6 +641,15 @@ const MEDIA_TYPES: Record<string, string> = {
   gif: "image/gif",
   webp: "image/webp",
   svg: "image/svg+xml",
+  pdf: "application/pdf",
+  mp4: "video/mp4",
+  webm: "video/webm",
+  mov: "video/quicktime",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  wav: "audio/wav",
+  ogg: "audio/ogg",
+  flac: "audio/flac",
 }
 
 router.get("/remote-servers/:id/files/raw", async (req, res) => {
@@ -627,10 +664,13 @@ router.get("/remote-servers/:id/files/raw", async (req, res) => {
     "Content-Type": req.query.download
       ? "application/octet-stream"
       : MEDIA_TYPES[path.extname(name).slice(1).toLowerCase()] || "text/plain; charset=utf-8",
-    // Remote content must never run as part of this origin.
+    // Remote content must never run as part of this origin. PDFs are exempt:
+    // browsers won't show them in a sandbox, and their viewers don't run
+    // with this origin's privileges.
     "X-Content-Type-Options": "nosniff",
-    "Content-Security-Policy": "sandbox",
-    ...(req.query.download && { "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}` }),
+    ...(!/\.pdf$/i.test(name) && { "Content-Security-Policy": "sandbox" }),
+    // Inline still names it, for viewer titles and saving from them.
+    "Content-Disposition": `${req.query.download ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(name)}`,
   }
   // Headers wait for the first byte so a failure can still be an error status.
   let started = false
@@ -656,6 +696,38 @@ router.get("/remote-servers/:id/files/raw", async (req, res) => {
   }
   proc.on("error", () => finish(255))
   proc.on("close", finish)
+})
+
+router.put("/remote-servers/:id/files/raw", async (req, res) => {
+  const p = filesPath(req.query.path)
+  if (["", ".", "..", "~"].includes(path.posix.basename(p))) {
+    throw new HttpError("Invalid file name", HttpCode.BadRequest)
+  }
+  const server = await getServer(req)
+  const { args, env } = await sshCommand(
+    req,
+    server,
+    filesArgs(req, server, false),
+    writeCommand(p, req.query.overwrite === "1"),
+  )
+  // The request body streams straight into the remote file.
+  const proc = spawn("ssh", args, { env, stdio: ["pipe", "ignore", "pipe"] })
+  proc.stdin!.on("error", () => {}) // ssh may exit (e.g. file exists) before reading it all.
+  req.pipe(proc.stdin!)
+  req.on("close", () => !req.complete && proc.kill())
+  let stderr = ""
+  proc.stderr!.on("data", (d) => (stderr += d))
+  const code = await new Promise<number | null>((resolve) => {
+    proc.on("error", () => resolve(255))
+    proc.on("close", resolve)
+  })
+  if (code !== 0) throw filesError(code, stderr)
+  res.json({})
+})
+
+router.delete("/remote-servers/:id/files", async (req, res) => {
+  await filesRun(req, await getServer(req), removeCommand(filesPath(req.query.path)))
+  res.json({})
 })
 
 /** Proxy /remote/<id>/* to the forwarded remote code-server. */

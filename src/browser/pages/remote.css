@@ -997,6 +997,13 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   touch-action: manipulation;
 }
 
+.keys button svg {
+  display: block;
+  height: 20px;
+  margin: auto;
+  width: 20px;
+}
+
 .keys button:active {
   background: #3c3c3c;
 }
@@ -1064,8 +1071,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 }
 
 /* On-screen keyboard, touch screens only. */
-.kbd,
-.kbd-toggle {
+.kbd {
   display: none;
 }
 
@@ -1079,8 +1085,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 }
 
 @media (pointer: coarse) {
-  .kbd,
-  .kbd-toggle {
+  .kbd {
     display: flex;
   }
 
@@ -1203,8 +1208,19 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   padding: 4px 0 env(safe-area-inset-bottom);
 }
 
+.files-list li {
+  align-items: center;
+  display: flex;
+}
+
+.files-list li:hover {
+  background: #2a2d2e;
+}
+
 .file-row {
   align-items: center;
+  flex: 1;
+  min-width: 0;
   background: none;
   border: 0;
   color: var(--text);
@@ -1219,11 +1235,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   width: 100%;
 }
 
-.file-row:hover {
-  background: #2a2d2e;
-}
-
-.file-row.selected {
+.files-list li:has(.file-row.selected) {
   background: #04395e;
 }
 
@@ -1300,10 +1312,43 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-.files-preview-body img {
+/* Delete shows on hover, or always where there's no hover. */
+.file-delete {
+  flex: none;
+  margin-right: 8px;
+  opacity: 0;
+}
+
+.files-list li:hover .file-delete,
+.file-delete:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .file-delete {
+    opacity: 1;
+  }
+}
+
+.files.dropping .files-body {
+  outline: 2px dashed var(--primary);
+  outline-offset: -8px;
+}
+
+.files-media {
+  border: 0;
   display: block;
   margin: 16px auto;
   max-width: calc(100% - 32px);
+}
+
+iframe.files-media {
+  height: calc(100% - 32px);
+  width: calc(100% - 32px);
+}
+
+audio.files-media {
+  width: calc(100% - 32px);
 }
 
 .files-text {

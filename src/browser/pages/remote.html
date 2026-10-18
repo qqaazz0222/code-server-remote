@@ -15,7 +15,7 @@
     <link rel="manifest" href="{{BASE}}/manifest.json" crossorigin="use-credentials" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
-    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=12" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=14" rel="stylesheet" />
     <!-- Shipped with VS Code; used by the SSH shell. -->
     <link href="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/css/xterm.css" rel="stylesheet" />
     <script defer src="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -170,18 +170,6 @@
       <div class="shell-head">
         <span id="shell-title"></span>
         <span class="shell-actions">
-          <button
-            type="button"
-            id="kbd-toggle"
-            class="icon-btn kbd-toggle"
-            aria-label="Toggle keyboard"
-            title="Toggle keyboard"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="5" width="20" height="14" rx="2" />
-              <path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M8 16h8" />
-            </svg>
-          </button>
           <button type="button" id="shell-close" class="icon-btn" aria-label="Close shell" title="Close shell">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M6 6l12 12M18 6L6 18" />
@@ -196,6 +184,13 @@
       <div id="combos" class="keys combos" role="toolbar" aria-label="Key combinations" hidden></div>
       <!-- Keys missing from mobile keyboards; shown on touch screens only. -->
       <div id="keys" class="keys" role="toolbar" aria-label="Special keys">
+        <!-- Shows or hides the on-screen keyboard; highlighted while it's shown. -->
+        <button type="button" tabindex="-1" id="kbd-toggle" aria-pressed="true" aria-label="Keyboard" title="Keyboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="2" y="6" width="20" height="13" rx="2" />
+            <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 15h6" />
+          </svg>
+        </button>
         <button type="button" tabindex="-1" data-key="esc">Esc</button>
         <button type="button" tabindex="-1" data-key="tab">Tab</button>
         <button type="button" tabindex="-1" data-mod="ctrl" aria-pressed="false">Ctrl</button>
@@ -222,6 +217,12 @@
       <div class="shell-head">
         <nav id="files-crumbs" class="crumbs" aria-label="Path"></nav>
         <span class="shell-actions">
+          <input id="files-input" type="file" multiple hidden />
+          <button type="button" id="files-upload" class="icon-btn" aria-label="Upload files" title="Upload files">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M12 16V4M6 9l6-6 6 6M4 20h16" />
+            </svg>
+          </button>
           <button
             type="button"
             id="files-hidden"
@@ -248,6 +249,16 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
             </button>
             <b id="preview-name"></b>
+            <a id="preview-open" class="icon-btn" target="_blank" rel="noopener" aria-label="Open in new tab" title="Open in new tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+              </svg>
+            </a>
+            <button type="button" id="preview-delete" class="icon-btn danger" aria-label="Delete" title="Delete">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+              </svg>
+            </button>
             <a id="preview-download" class="icon-btn" aria-label="Download" title="Download">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <path d="M12 4v12M6 11l6 6 6-6M4 20h16" />
@@ -1090,6 +1101,7 @@
         keys.onclick = (e) => {
           const b = e.target.closest("button")
           if (!b || longPressed) return
+          if (b.id === "kbd-toggle") return setKbd(kbd.hidden)
           combos.hidden = true
           if (b.dataset.mod) setMod(b.dataset.mod, !mods[b.dataset.mod])
           else input(keySeq(b.dataset.key, term.modes.applicationCursorKeysMode))
@@ -1151,7 +1163,14 @@
           }
         }
         drawKbd()
-        kbd.hidden = !coarse
+        // The user's choice sticks, also across shells.
+        const setKbd = (on) => {
+          kbd.hidden = !on
+          $("kbd-toggle").setAttribute("aria-pressed", on)
+          storage("kbd", on ? "1" : "0")
+        }
+        if (coarse) setKbd(storage("kbd") !== "0")
+        else kbd.hidden = true
         // Keys act on press, not click, so fast typing doesn't drop taps.
         kbd.onpointerdown = (e) => {
           const b = e.target.closest("button")
@@ -1169,18 +1188,16 @@
         }
         kbd.onpointerup = kbd.onpointercancel = kbd.onpointerleave = () => clearTimeout(repeat)
         kbd.oncontextmenu = kbd.onmousedown = (e) => e.preventDefault()
-        $("kbd-toggle").onclick = () => (kbd.hidden = !kbd.hidden)
         term.onResize(({ cols, rows }) => send({ cols, rows }))
         term.onData(input)
         // xterm cancels touch events, so a tap never focuses it. Taps (not scrolls)
-        // focus it for hardware keyboards and bring the on-screen keyboard back.
+        // focus it for hardware keyboards.
         let touchStart
         box.ontouchstart = (e) => (touchStart = e.touches[0])
         box.ontouchend = (e) => {
           combos.hidden = true
           const t = e.changedTouches[0]
           if (!touchStart || Math.hypot(t.clientX - touchStart.clientX, t.clientY - touchStart.clientY) > 10) return
-          kbd.hidden = false
           term.focus()
         }
         ws.onopen = () => {
@@ -1221,6 +1238,9 @@
       // File browser. Listing and previews reuse the ssh login from /files/open.
       const PREVIEW_MAX = 512 * 1024
       const IMAGE = /\.(png|jpe?g|gif|webp|svg)$/i
+      const VIDEO = /\.(mp4|webm|mov)$/i
+      const AUDIO = /\.(mp3|m4a|wav|ogg|flac)$/i
+      const PDF = /\.pdf$/i
       let closeFiles = () => {}
       const files = async (s, creds, folder = "~") => {
         closeFiles()
@@ -1265,6 +1285,7 @@
               b.append(el("span", "file-name", e.name + (e.link ? " ↗" : "")), el("span", "file-meta", meta), el("span", "file-date", date))
               b.onclick = () => (e.up ? open(cwd.replace(/\/[^/]*$/, "") || "/") : e.dir ? open(join(e.name)) : show(e))
               li.append(b)
+              if (!e.up) li.append(iconButton("trash", `Delete ${e.name}`, () => remove(e), "danger file-delete"))
               return li
             }),
           )
@@ -1293,12 +1314,24 @@
           const body = $("preview-body")
           $("preview-name").textContent = e.name
           $("preview-download").href = raw(p, "&download=1")
+          $("preview-open").href = raw(p)
+          $("preview-delete").onclick = () => remove(e)
           preview.hidden = false
-          if (IMAGE.test(e.name)) {
-            const img = el("img")
-            img.alt = e.name
-            img.src = raw(p)
-            return body.replaceChildren(img)
+          // The browser shows these itself; text is fetched and shown below.
+          const media = IMAGE.test(e.name)
+            ? "img"
+            : VIDEO.test(e.name)
+              ? "video"
+              : AUDIO.test(e.name)
+                ? "audio"
+                : PDF.test(e.name) && "iframe"
+          if (media) {
+            const m = el(media, "files-media")
+            if (media === "img") m.alt = e.name
+            else if (media === "iframe") m.title = e.name
+            else m.controls = true
+            m.src = raw(p)
+            return body.replaceChildren(m)
           }
           body.replaceChildren(el("p", "files-note", "Loading…"))
           try {
@@ -1313,6 +1346,55 @@
           } catch (error) {
             body.replaceChildren(el("p", "files-note error", error.message))
           }
+        }
+
+        const remove = async (e) => {
+          const what = e.dir ? `the folder "${e.name}" and everything in it` : `"${e.name}"`
+          if (!confirm(`Delete ${what}? This can't be undone.`)) return
+          try {
+            await request("DELETE", `${fapi}?path=${encodeURIComponent(join(e.name))}`)
+            toast(`Deleted ${e.name}`)
+            open(cwd)
+          } catch (error) {
+            toast(`Failed to delete ${e.name}: ${error.message}`, true)
+          }
+        }
+        const upload = async (list) => {
+          const into = cwd
+          let done = 0
+          for (const f of list) {
+            const exists = entries.some((e) => e.name === f.name)
+            if (exists && !confirm(`"${f.name}" already exists. Replace it?`)) continue
+            toast(`Uploading ${f.name} (${bytes(f.size)})…`)
+            const q = `path=${encodeURIComponent((into === "/" ? "/" : into + "/") + f.name)}${exists ? "&overwrite=1" : ""}`
+            const res = await fetch(`${fapi}/raw?${q}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/octet-stream" },
+              body: f,
+            }).catch((error) => ({ ok: false, json: async () => ({ error: error.message }) }))
+            if (res.ok) done++
+            else toast(`Failed to upload ${f.name}: ${(await res.json().catch(() => ({}))).error || res.statusText}`, true)
+          }
+          if (done) toast(`Uploaded ${done} file${done > 1 ? "s" : ""}`)
+          if (cwd === into) open(cwd)
+        }
+        $("files-upload").onclick = () => $("files-input").click()
+        $("files-input").onchange = (e) => {
+          upload([...e.target.files])
+          e.target.value = ""
+        }
+        // Drop files anywhere on the panel to upload into the current folder.
+        const panel = $("files")
+        panel.ondragover = (e) => {
+          if (!e.dataTransfer.types.includes("Files")) return
+          e.preventDefault()
+          panel.classList.add("dropping")
+        }
+        panel.ondragleave = (e) => !panel.contains(e.relatedTarget) && panel.classList.remove("dropping")
+        panel.ondrop = (e) => {
+          e.preventDefault()
+          panel.classList.remove("dropping")
+          if (e.dataTransfer.files.length) upload([...e.dataTransfer.files])
         }
 
         $("files-hidden").onclick = () => {
