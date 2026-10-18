@@ -1,67 +1,138 @@
-body {
-  min-height: 568px;
-  min-width: 320px;
-  overflow: auto;
-}
-
-.login-form {
+.login {
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  flex: 1;
-  justify-content: center;
-}
-
-.login-form > .field {
-  display: flex;
-  flex-direction: row;
+  justify-content: space-between;
+  max-width: 800px;
+  min-height: 480px;
+  padding: 40px;
   width: 100%;
 }
 
-@media (max-width: 600px) {
-  .login-form > .field {
-    flex-direction: column;
-  }
+.login .top {
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
 }
 
-.login-form > .error {
-  color: red;
-  margin-top: 16px;
+.login .title {
+  font-size: 1.85rem;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  margin: 0;
+  max-width: 260px;
 }
 
-.login-form > .field > .password {
-  background-color: rgb(244, 247, 252);
-  background-color: light-dark(rgb(244, 247, 252), #374151);
-  border-radius: 5px;
-  border: 1px solid #ddd;
-  border: 1px solid light-dark(#ddd, #4b5563);
-  box-sizing: border-box;
-  flex: 1;
-  padding: 16px;
+.login .sub {
+  color: var(--l-text-2);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 12px 0 0;
+  max-width: 300px;
 }
 
-.login-form > .field > .password::placeholder {
-  color: rgb(148 163 184);
+.logo-tile {
+  align-items: center;
+  background: linear-gradient(145deg, #f7f7f8, #e6e6ea);
+  border-radius: 24px;
+  display: flex;
+  flex: none;
+  height: 136px;
+  justify-content: center;
+  margin: 44px 52px 0 0;
+  width: 136px;
 }
 
-.login-form > .field > .password:focus {
-  outline: 2px solid rgb(63, 131, 248);
+.logo-tile img {
+  height: 72px;
+  width: 72px;
+}
+
+.login-form {
+  align-items: flex-end;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  margin-top: 40px;
 }
 
 .login-form > .user {
   display: none;
 }
 
-.login-form > .field > .submit {
-  margin-left: 20px;
+.login-form .fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(240px, 100%);
+}
+
+.login-form .row {
+  position: relative;
+}
+
+.login-form .password {
+  padding-right: 40px;
+}
+
+.login-form .toggle {
+  height: 28px;
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+}
+
+.login-form .toggle svg {
+  height: 16px;
+  width: 16px;
+}
+
+.login-form .hint,
+.login-form .error {
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.login-form .hint {
+  color: #b7791f;
+}
+
+.login-form .error {
+  color: var(--danger);
+}
+
+/* Lighter until something is typed, like ZimaOS. */
+.login-form:has(.password:placeholder-shown) .submit {
+  background: var(--primary-soft);
+}
+
+.toggle .eye-off,
+.toggle.on .eye {
+  display: none;
+}
+
+.toggle.on .eye-off {
+  display: block;
 }
 
 @media (max-width: 600px) {
-  .login-form > .field > .submit {
-    margin-left: 0px;
-    margin-top: 16px;
+  .login {
+    min-height: 0;
+    padding: 28px 24px;
   }
-}
 
-input {
-  -webkit-appearance: none;
+  .logo-tile {
+    border-radius: 16px;
+    height: 72px;
+    margin: 0;
+    width: 72px;
+  }
+
+  .logo-tile img {
+    height: 40px;
+    width: 40px;
+  }
 }

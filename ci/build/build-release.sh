@@ -68,6 +68,7 @@ bundle_code_server() {
   rsync src/browser/pages/*.html "$RELEASE_PATH/src/browser/pages"
   rsync src/browser/pages/*.css "$RELEASE_PATH/src/browser/pages"
   rsync src/browser/robots.txt "$RELEASE_PATH/src/browser"
+  rsync src/images/ "$RELEASE_PATH/src/images"
 
   # Adds the commit to package.json
   jq --slurp '(.[0] | del(.scripts,.jest,.devDependencies)) * .[1]' package.json <(

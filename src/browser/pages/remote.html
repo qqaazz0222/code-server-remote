@@ -1,0 +1,1188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; manifest-src 'self'; img-src 'self' data:; font-src 'self' data:;"
+    />
+    <meta name="color-scheme" content="dark" />
+    <title>Servers</title>
+    <link rel="icon" href="{{CS_STATIC_BASE}}/src/browser/media/favicon-dark-support.svg" />
+    <link rel="alternate icon" href="{{CS_STATIC_BASE}}/src/browser/media/favicon.ico" />
+    <link rel="manifest" href="{{BASE}}/manifest.json" crossorigin="use-credentials" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=8" rel="stylesheet" />
+    <!-- Shipped with VS Code; used by the SSH shell. -->
+    <link href="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/css/xterm.css" rel="stylesheet" />
+    <script defer src="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/lib/xterm.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <img class="logo-mark" src="{{CS_STATIC_BASE}}/src/browser/media/favicon.svg" alt="" />
+        <span>code-server</span>
+      </div>
+      <a class="icon-btn" href="{{BASE}}/logout" title="Log out" aria-label="Log out">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+        </svg>
+      </a>
+    </header>
+
+    <main class="page">
+      <aside class="side">
+        <section class="widget clock-widget">
+          <div id="clock" class="clock"></div>
+          <div id="date" class="date"></div>
+        </section>
+
+        <section class="widget">
+          <div class="w-head">
+            <h2>System</h2>
+            <span id="cores" class="w-meta"></span>
+          </div>
+          <div class="gauges">
+            <div id="cpu" class="gauge">
+              <div class="ring"><span class="value">–</span></div>
+              <span class="label">CPU</span>
+            </div>
+            <div id="ram" class="gauge">
+              <div class="ring"><span class="value">–</span></div>
+              <span class="label">RAM</span>
+              <span class="detail"></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="widget">
+          <div class="w-head"><h2>Storage</h2></div>
+          <div class="storage">
+            <svg viewBox="0 0 48 48" class="disk" aria-hidden="true">
+              <rect x="4" y="8" width="40" height="32" rx="6" fill="#d9d9de" />
+              <rect x="4" y="30" width="40" height="10" fill="#bdbdc4" />
+              <circle cx="24" cy="21" r="8" fill="#f4f4f6" stroke="#a9a9b2" stroke-width="2" />
+              <circle cx="24" cy="21" r="2" fill="#8c8c96" />
+              <path d="M10 35h16" stroke="#7d7d87" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <div class="storage-text">
+              <span id="disk-used">Used: –</span>
+              <span id="disk-total">Total: –</span>
+            </div>
+          </div>
+          <div class="bar"><span id="disk-bar"></span></div>
+        </section>
+
+        <section class="widget">
+          <div class="w-head">
+            <h2>Network</h2>
+            <span id="iface" class="w-meta"></span>
+          </div>
+          <ul id="ips" class="ips"></ul>
+          <div class="net-chart">
+            <div class="net-axis"><span id="net-max"></span><span>0</span><span id="net-min"></span></div>
+            <svg
+              id="net-svg"
+              viewBox="0 0 240 100"
+              preserveAspectRatio="none"
+              role="img"
+              aria-label="Upload and download over the last 2 minutes"
+            ></svg>
+          </div>
+          <div class="net-legend">
+            <span><i class="sw up"></i>↑ Up <b id="net-up">–</b></span>
+            <span><i class="sw down"></i>↓ Down <b id="net-down">–</b></span>
+          </div>
+        </section>
+
+        <section class="widget">
+          <div class="w-head">
+            <h2>Connections</h2>
+            <span id="session-count" class="w-meta"></span>
+          </div>
+          <ul id="sessions" class="sessions"></ul>
+        </section>
+      </aside>
+
+      <section class="main">
+        <label class="widget search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.3-4.3" />
+          </svg>
+          <input id="search" type="search" placeholder="Search…" aria-label="Search servers" />
+        </label>
+        <div class="section-head">
+          <h1>Servers</h1>
+          <button id="add" class="icon-btn" type="button" title="Add server" aria-label="Add server">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
+        <div id="servers" class="groups"></div>
+        <p id="empty" class="empty" hidden>No servers match your search.</p>
+      </section>
+    </main>
+
+    <footer id="footer" class="footer"></footer>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+
+    <dialog id="mode-dialog" class="card sheet">
+      <div class="sheet-head">
+        <h2 id="mode-title">Open</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+      <div class="sheet-body modes">
+        <button type="button" class="mode" data-mode="code">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M16 18l6-6-6-6M8 6l-6 6 6 6" />
+          </svg>
+          <span><b>VS Code</b><small>Run code-server on the host and open the editor</small></span>
+        </button>
+        <button type="button" class="mode" data-mode="shell">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M4 17l6-6-6-6M12 19h8" />
+          </svg>
+          <span><b>SSH Shell</b><small>Open a terminal on the host</small></span>
+        </button>
+      </div>
+    </dialog>
+
+    <!-- Not a <dialog>: Escape must reach the terminal. -->
+    <div id="shell" class="shell" hidden>
+      <div class="shell-head">
+        <span id="shell-title"></span>
+        <span class="shell-actions">
+          <button
+            type="button"
+            id="kbd-toggle"
+            class="icon-btn kbd-toggle"
+            aria-label="Toggle keyboard"
+            title="Toggle keyboard"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="5" width="20" height="14" rx="2" />
+              <path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M8 16h8" />
+            </svg>
+          </button>
+          <button type="button" id="shell-close" class="icon-btn" aria-label="Close shell" title="Close shell">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </span>
+      </div>
+      <div id="term" class="term"><span id="ghost" class="ghost" hidden></span></div>
+      <!-- Command suggestions from this server's history; tap to complete, or press →. -->
+      <div id="suggest" class="keys suggest" role="toolbar" aria-label="Suggestions" hidden></div>
+      <!-- Long-press menu of key combos. -->
+      <div id="combos" class="keys combos" role="toolbar" aria-label="Key combinations" hidden></div>
+      <!-- Keys missing from mobile keyboards; shown on touch screens only. -->
+      <div id="keys" class="keys" role="toolbar" aria-label="Special keys">
+        <button type="button" tabindex="-1" data-key="esc">Esc</button>
+        <button type="button" tabindex="-1" data-key="tab">Tab</button>
+        <button type="button" tabindex="-1" data-mod="ctrl" aria-pressed="false">Ctrl</button>
+        <button type="button" tabindex="-1" data-mod="alt" aria-pressed="false">Alt</button>
+        <button type="button" tabindex="-1" data-key="left" aria-label="Left">←</button>
+        <button type="button" tabindex="-1" data-key="up" aria-label="Up">↑</button>
+        <button type="button" tabindex="-1" data-key="down" aria-label="Down">↓</button>
+        <button type="button" tabindex="-1" data-key="right" aria-label="Right">→</button>
+        <button type="button" tabindex="-1" data-key="home">Home</button>
+        <button type="button" tabindex="-1" data-key="end">End</button>
+        <button type="button" tabindex="-1" data-key="pgup">PgUp</button>
+        <button type="button" tabindex="-1" data-key="pgdn">PgDn</button>
+        <button type="button" tabindex="-1" data-key="|">|</button>
+        <button type="button" tabindex="-1" data-key="/">/</button>
+        <button type="button" tabindex="-1" data-key="-">-</button>
+        <button type="button" tabindex="-1" data-key="~">~</button>
+      </div>
+      <!-- On-screen keyboard used instead of the OS one on touch screens. -->
+      <div id="kbd" class="kbd" role="group" aria-label="Keyboard"></div>
+    </div>
+
+    <dialog id="progress" class="card sheet">
+      <div class="sheet-head">
+        <h2 id="progress-title">Connecting</h2>
+      </div>
+      <div class="sheet-body">
+        <div class="progress-row">
+          <span class="spinner"></span>
+          <p class="muted">The first connection installs code-server and extensions, which can take a few minutes.</p>
+        </div>
+        <pre id="progress-log" class="log"></pre>
+      </div>
+      <div class="actions">
+        <button type="button" id="progress-cancel" class="btn ghost">Cancel</button>
+      </div>
+    </dialog>
+
+    <dialog id="login-dialog" class="card sheet">
+      <form id="login-form" method="dialog">
+        <div class="sheet-head">
+          <h2 id="login-title">Sign in</h2>
+          <button type="button" class="icon-btn" data-close aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <div class="sheet-body form">
+          <label>Account <input class="field" name="user" required autocomplete="username" /></label>
+          <label
+            >Password <input class="field" name="password" type="password" required autocomplete="current-password"
+          /></label>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn ghost" data-close>Cancel</button>
+          <button type="submit" class="btn">Connect</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="dialog" class="card sheet">
+      <form id="form" method="dialog">
+        <div class="sheet-head">
+          <h2 id="form-title">Add server</h2>
+          <button type="button" class="icon-btn" data-close aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <div class="sheet-body form">
+          <div class="group">
+            <label>Name <input class="field" name="name" placeholder="My server" /></label>
+            <label
+              >Group
+              <input class="field" name="group" list="group-list" placeholder="None" autocomplete="off" />
+              <datalist id="group-list"></datalist>
+            </label>
+            <div class="cols">
+              <label class="grow"
+                >Host <input class="field" name="host" required placeholder="example.com or ssh config alias"
+              /></label>
+              <label class="port"
+                >Port <input class="field" name="port" type="number" min="1" max="65535" placeholder="22"
+              /></label>
+            </div>
+          </div>
+          <div class="group">
+            <label>Account <input class="field" name="user" placeholder="ubuntu" /></label>
+            <label>Identity file <input class="field" name="identityFile" placeholder="~/.ssh/id_ed25519" /></label>
+            <label
+              >Password
+              <input
+                class="field"
+                name="password"
+                type="password"
+                autocomplete="new-password"
+                placeholder="Ask on connect"
+            /></label>
+            <label id="clear-password" class="check"
+              ><input name="clearPassword" type="checkbox" /> Remove saved password</label
+            >
+          </div>
+          <div class="group">
+            <label>Folder <input class="field" name="folder" placeholder="/home/ubuntu/project" /></label>
+          </div>
+          <p id="form-error" class="error" hidden></p>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn ghost" data-close>Cancel</button>
+          <button type="submit" class="btn">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script>
+      const base = "{{BASE}}"
+      const api = base + "/remote-servers"
+      const $ = (id) => document.getElementById(id)
+      const list = $("servers")
+      const dialog = $("dialog")
+      const form = $("form")
+      const loginDialog = $("login-dialog")
+      const loginForm = $("login-form")
+      const progress = $("progress")
+      let servers = []
+      let statuses = {}
+      let editing = undefined
+      let connecting = undefined
+
+      const ICONS = {
+        edit: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+        trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
+        plug: '<path d="M18.4 6.6a9 9 0 1 1-12.8 0M12 2v10"/>',
+        monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+      }
+      const svg = (name) =>
+        `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`
+
+      let toastTimer
+      const toast = (text, error) => {
+        const t = $("toast")
+        t.textContent = text
+        t.classList.toggle("error", !!error)
+        t.hidden = false
+        clearTimeout(toastTimer)
+        toastTimer = setTimeout(() => (t.hidden = true), error ? 8000 : 3000)
+      }
+
+      const request = async (method, url, body) => {
+        const res = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: body && JSON.stringify(body),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(json.error || res.statusText)
+        return json
+      }
+
+      const el = (tag, cls, text) => {
+        const e = document.createElement(tag)
+        if (cls) e.className = cls
+        if (text) e.textContent = text
+        return e
+      }
+
+      const iconButton = (name, label, onclick, cls) => {
+        const b = el("button", "icon-btn" + (cls ? " " + cls : ""))
+        b.type = "button"
+        b.title = label
+        b.setAttribute("aria-label", label)
+        b.innerHTML = svg(name)
+        b.onclick = onclick
+        return b
+      }
+
+      // Per-viewer UI state only; storage can be unavailable (private mode).
+      const storage = (key, value) => {
+        try {
+          if (value === undefined) return localStorage.getItem("cs-remote-" + key)
+          localStorage.setItem("cs-remote-" + key, value)
+        } catch {}
+      }
+
+      const hue = (str) => [...str].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7)
+
+      const bytes = (n) => {
+        const units = ["B", "KB", "MB", "GB", "TB"]
+        let i = 0
+        while (n >= 1024 && i < units.length - 1) ((n /= 1024), i++)
+        return `${n.toFixed(i > 2 ? 2 : 0)} ${units[i]}`
+      }
+
+      const disconnect = async (s) => {
+        await request("POST", `${api}/${s.id}/disconnect`)
+        toast(`Disconnected from ${s.name}`)
+        load()
+      }
+
+      const renderSessions = () => {
+        const connected = servers.filter((s) => s.connected)
+        $("session-count").textContent = `${connected.length} active`
+        const ul = $("sessions")
+        ul.replaceChildren()
+        if (!connected.length) ul.append(el("li", "none", "No active connections"))
+        for (const s of connected) {
+          const li = el("li")
+          li.append(el("span", "dot"), el("span", "name", s.name))
+          li.append(iconButton("plug", `Disconnect ${s.name}`, () => disconnect(s)))
+          ul.append(li)
+        }
+      }
+
+      const render = () => {
+        const q = $("search").value.trim().toLowerCase()
+        const shown = servers.filter(
+          (s) => !q || `${s.name} ${s.host} ${s.user || ""} ${s.group || ""}`.toLowerCase().includes(q),
+        )
+        $("empty").hidden = shown.length > 0
+        const byGroup = new Map()
+        for (const s of shown) {
+          const li = el("li", "tile widget" + (s.connected ? " connected" : ""))
+          const open = el("button", "tile-main")
+          open.type = "button"
+          open.title = s.connected ? `Open ${s.name}` : `Connect to ${s.name}`
+          open.onclick = () => choose(s)
+          const avatar = el("span", "avatar")
+          if (s.id === "local") {
+            avatar.classList.add("local")
+            avatar.innerHTML = svg("monitor")
+          } else {
+            avatar.textContent = (s.name[0] || "?").toUpperCase()
+            avatar.style.setProperty("--hue", hue(s.name))
+          }
+          const st = statuses[s.id]
+          if (st) {
+            const badge = el("span", "status " + (st.online ? "online" : st.online === false ? "offline" : "unknown"))
+            badge.title = st.online
+              ? `Online · ${st.ms} ms`
+              : st.online === false
+                ? "Offline"
+                : "Can't check (jump host)"
+            badge.setAttribute("aria-label", badge.title)
+            avatar.append(badge)
+          }
+
+          const name = el("span", "name", s.name)
+          if (s.connected) name.prepend(el("span", "dot"))
+          open.append(
+            avatar,
+            name,
+            el("span", "user", s.user || "Ask on connect"),
+            el("span", "addr", `${s.host}:${s.port || 22}`),
+          )
+          li.append(open)
+
+          const actions = el("div", "tile-actions")
+          if (s.connected) actions.append(iconButton("plug", "Disconnect", () => disconnect(s)))
+          actions.append(iconButton("edit", "Edit", () => openForm(s)))
+          if (s.id !== "local") {
+            const del = async () => {
+              if (!confirm(`Delete ${s.name}?`)) return
+              await request("DELETE", `${api}/${s.id}`)
+              toast(`Deleted ${s.name}`)
+              load()
+            }
+            actions.append(iconButton("trash", "Delete", del, "danger"))
+          }
+          li.append(actions)
+          const key = s.group || ""
+          if (!byGroup.has(key)) byGroup.set(key, [])
+          byGroup.get(key).push(li)
+        }
+        renderGroups(byGroup, !!q)
+        renderSessions()
+      }
+
+      // Ungrouped first, then groups by name. Sections appear once any group exists.
+      const collapsed = new Set(JSON.parse(storage("collapsed") || "[]"))
+      const renderGroups = (byGroup, searching) => {
+        list.replaceChildren()
+        const keys = [...byGroup.keys()].sort((a, b) => (a && b ? a.localeCompare(b) : a ? 1 : -1))
+        const grouped = servers.some((s) => s.group)
+        for (const key of keys) {
+          const grid = el("ul", "grid")
+          grid.append(...byGroup.get(key))
+          if (!grouped) {
+            list.append(grid)
+            continue
+          }
+          const sec = el("details", "group-sec")
+          sec.open = searching || !collapsed.has(key)
+          const summary = el("summary")
+          summary.append(el("span", "title", key || "Ungrouped"), el("span", "count", String(byGroup.get(key).length)))
+          sec.append(summary, grid)
+          sec.ontoggle = () => {
+            if (searching) return
+            sec.open ? collapsed.delete(key) : collapsed.add(key)
+            storage("collapsed", JSON.stringify([...collapsed]))
+          }
+          list.append(sec)
+        }
+      }
+
+      const load = async () => {
+        try {
+          servers = await request("GET", api)
+          render()
+        } catch (error) {
+          toast(error.message, true)
+        }
+      }
+
+      // Reachability of each server's SSH port.
+      const STATUS_INTERVAL = 30000
+      const loadStatus = async () => {
+        try {
+          statuses = await request("GET", `${api}/status`)
+          render()
+        } catch {
+          // Best effort, like the widgets.
+        }
+      }
+
+      const gauge = (id, ratio, detail) => {
+        const g = $(id)
+        g.style.setProperty("--p", Math.max(0, Math.min(1, ratio)))
+        g.querySelector(".value").innerHTML = `${Math.round(ratio * 100)}<small>%</small>`
+        if (detail !== undefined) g.querySelector(".detail").textContent = detail
+      }
+
+      // Network histogram: upload above the baseline, download below, one shared scale.
+      const NET_BARS = 40 // 3s polls, ~2 minutes
+      let netPrev
+      const netHistory = []
+      const rate = (n) => (n < 1024 ? `${Math.round(n)} B/s` : `${bytes(n).replace(/(\.\d)\d/, "$1")}/s`)
+
+      const netSample = (net) => {
+        const now = Date.now()
+        if (netPrev && netPrev.name === net.name) {
+          const dt = (now - netPrev.t) / 1000
+          netHistory.push({
+            up: Math.max(0, (net.tx - netPrev.tx) / dt),
+            down: Math.max(0, (net.rx - netPrev.rx) / dt),
+          })
+          if (netHistory.length > NET_BARS) netHistory.shift()
+        }
+        netPrev = { ...net, t: now }
+        $("iface").textContent = net.name
+        renderNet()
+      }
+
+      const renderNet = () => {
+        const last = netHistory[netHistory.length - 1]
+        $("net-up").textContent = last ? rate(last.up) : "–"
+        $("net-down").textContent = last ? rate(last.down) : "–"
+        // Power-of-two ceiling keeps the axis labels round in KB/MB.
+        const peak = Math.max(1024, ...netHistory.flatMap((h) => [h.up, h.down]))
+        const max = 2 ** Math.ceil(Math.log2(peak))
+        $("net-max").textContent = rate(max).replace("/s", "")
+        $("net-min").textContent = rate(max).replace("/s", "")
+        const w = 240 / NET_BARS
+        const offset = NET_BARS - netHistory.length
+        let out =
+          '<line class="grid" x1="0" x2="240" y1="0.5" y2="0.5"/><line class="grid" x1="0" x2="240" y1="99.5" y2="99.5"/>'
+        netHistory.forEach((h, i) => {
+          const x = (offset + i) * w + 1
+          const up = (h.up / max) * 49
+          const down = (h.down / max) * 49
+          if (up > 0.3) out += `<rect class="up" x="${x}" y="${49 - up}" width="${w - 2}" height="${up}" rx="1"/>`
+          if (down > 0.3) out += `<rect class="down" x="${x}" y="51" width="${w - 2}" height="${down}" rx="1"/>`
+          const ago = (netHistory.length - 1 - i) * 3
+          out += `<rect class="hit" x="${(offset + i) * w}" y="0" width="${w}" height="100"><title>${ago ? ago + "s ago" : "now"} · ↑ ${rate(h.up)} · ↓ ${rate(h.down)}</title></rect>`
+        })
+        out += '<line class="base" x1="0" x2="240" y1="50" y2="50"/>'
+        $("net-svg").innerHTML = out
+      }
+
+      const loadSystem = async () => {
+        try {
+          const info = await request("GET", `${base}/system-info`)
+          gauge("cpu", info.cpu.usage)
+          gauge("ram", info.memory.used / info.memory.total, bytes(info.memory.used))
+          $("cores").textContent = `${info.cpu.cores} cores`
+          if (info.network) netSample(info.network)
+          $("ips").replaceChildren(
+            ...info.addresses.map((a) => {
+              const li = el("li")
+              li.append(el("span", "if", a.name), el("span", "ip", a.address))
+              return li
+            }),
+          )
+          if (info.disk) {
+            $("disk-used").textContent = `Used: ${bytes(info.disk.used)}`
+            $("disk-total").textContent = `Total: ${bytes(info.disk.total)}`
+            $("disk-bar").style.setProperty("--p", info.disk.used / info.disk.total)
+          }
+          const d = Math.floor(info.uptime / 86400)
+          const h = Math.floor((info.uptime % 86400) / 3600)
+          $("footer").textContent = `${info.hostname} · up ${d ? d + "d " : ""}${h}h`
+        } catch {
+          // Widgets are best effort.
+        }
+      }
+
+      const choose = (s) => {
+        if (connecting) return
+        const modeDialog = $("mode-dialog")
+        $("mode-title").textContent = `Open ${s.name}`
+        modeDialog.querySelectorAll("[data-mode]").forEach(
+          (b) =>
+            (b.onclick = () => {
+              modeDialog.close()
+              connect(s, b.dataset.mode)
+            }),
+        )
+        modeDialog.showModal()
+      }
+
+      // Ask for account and password unless the server has saved credentials.
+      const connect = (s, mode = "code") => {
+        if (connecting) return
+        const go = mode === "shell" ? shell : start
+        if ((mode === "code" && s.connected) || s.hasPassword || s.identityFile) return go(s)
+        loginForm.reset()
+        loginForm.user.value = s.user || ""
+        $("login-title").textContent = `Sign in to ${s.name}`
+        loginForm.onsubmit = (e) => {
+          e.preventDefault()
+          const creds = Object.fromEntries(new FormData(loginForm))
+          loginForm.reset()
+          loginDialog.close()
+          go(s, creds)
+        }
+        loginDialog.showModal()
+        ;(s.user ? loginForm.password : loginForm.user).focus()
+      }
+
+      const start = async (s, creds) => {
+        const url = `${base}/remote/${s.id}/` + (s.folder ? "?folder=" + encodeURIComponent(s.folder) : "")
+        if (s.connected) return (location.href = url)
+        connecting = { id: s.id, cancelled: false }
+        $("progress-title").textContent = `Connecting to ${s.name}`
+        $("progress-log").textContent = ""
+        progress.showModal()
+        // Show the ssh/install output while waiting.
+        const poll = setInterval(async () => {
+          const { log } = await request("GET", `${api}/${s.id}/log`).catch(() => ({ log: [] }))
+          const pre = $("progress-log")
+          pre.textContent = log.join("\n")
+          pre.scrollTop = pre.scrollHeight
+        }, 1000)
+        try {
+          await request("POST", `${api}/${s.id}/connect`, creds)
+          location.href = url
+        } catch (error) {
+          progress.close()
+          if (!connecting.cancelled) toast(`Failed to connect to ${s.name}: ${error.message}`, true)
+          connecting = undefined
+          load()
+        } finally {
+          clearInterval(poll)
+        }
+      }
+
+      // Escape sequences for the key bar; arrows/Home/End differ in application cursor mode (vim, less).
+      const keySeq = (key, app) => {
+        const ss3 = app ? "\x1bO" : "\x1b["
+        const seqs = {
+          esc: "\x1b",
+          tab: "\t",
+          up: ss3 + "A",
+          down: ss3 + "B",
+          right: ss3 + "C",
+          left: ss3 + "D",
+          home: ss3 + "H",
+          end: ss3 + "F",
+          pgup: "\x1b[5~",
+          pgdn: "\x1b[6~",
+        }
+        return seqs[key] ?? key
+      }
+
+      // Shown on long-press of a key bar button.
+      const ctrlKey = (c) => String.fromCharCode(c.charCodeAt(0) & 31)
+      // Seed suggestions before a server has any history.
+      const COMMON = `
+        ls -la
+        cd ..
+        less
+        tail -f
+        grep -rn
+        find . -name
+        mkdir -p
+        cp -r
+        chmod +x
+        df -h
+        du -sh *
+        free -h
+        htop
+        ps aux | grep
+        nvidia-smi
+        watch -n 1 nvidia-smi
+        sudo apt update
+        sudo apt install
+        sudo systemctl status
+        sudo systemctl restart
+        journalctl -fu
+        git status
+        git pull
+        git log --oneline
+        git diff
+        git add .
+        git commit -m
+        git push
+        git checkout
+        docker ps
+        docker ps -a
+        docker logs -f
+        docker compose up -d
+        docker compose down
+        tmux attach
+        tmux new -s
+        conda activate
+        python3
+        pip install
+        npm install
+        npm run
+        exit
+      `
+        .trim()
+        .split(/\n\s*/)
+
+      // On-screen keyboard rows; named keys are looked up in KBD_LABELS.
+      const KBD = {
+        abc: [
+          "1 2 3 4 5 6 7 8 9 0",
+          "q w e r t y u i o p",
+          "a s d f g h j k l",
+          "shift z x c v b n m bksp",
+          "?123 lang , space . enter",
+        ],
+        sym: [
+          "1 2 3 4 5 6 7 8 9 0",
+          "! @ # $ % ^ & * ( )",
+          "- _ = + [ ] { } \\ |",
+          "` ~ < > ; : ' \" / bksp",
+          "ABC ? space . enter",
+        ],
+      }
+      KBD.ko = [
+        "1 2 3 4 5 6 7 8 9 0",
+        "ㅂ ㅈ ㄷ ㄱ ㅅ ㅛ ㅕ ㅑ ㅐ ㅔ",
+        "ㅁ ㄴ ㅇ ㄹ ㅎ ㅗ ㅓ ㅏ ㅣ",
+        "shift ㅋ ㅌ ㅊ ㅍ ㅠ ㅜ ㅡ bksp",
+        KBD.abc[4],
+      ]
+      const SHIFT_KO = { ㅂ: "ㅃ", ㅈ: "ㅉ", ㄷ: "ㄸ", ㄱ: "ㄲ", ㅅ: "ㅆ", ㅐ: "ㅒ", ㅔ: "ㅖ" }
+      const KBD_LABELS = {
+        shift: ["⇧", "Shift"],
+        bksp: ["⌫", "Backspace"],
+        space: [" ", "Space"],
+        enter: ["⏎", "Enter"],
+      }
+
+      // 두벌식 composition. A syllable is {c, v, f}: initial, vowel and final jamo.
+      const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
+      const JUNG = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ"
+      const JONG = " ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ"
+      const MIX = Object.fromEntries(
+        "ㅗㅏㅘ ㅗㅐㅙ ㅗㅣㅚ ㅜㅓㅝ ㅜㅔㅞ ㅜㅣㅟ ㅡㅣㅢ ㄱㅅㄳ ㄴㅈㄵ ㄴㅎㄶ ㄹㄱㄺ ㄹㅁㄻ ㄹㅂㄼ ㄹㅅㄽ ㄹㅌㄾ ㄹㅍㄿ ㄹㅎㅀ ㅂㅅㅄ"
+          .split(" ")
+          .map((m) => [m.slice(0, 2), m[2]]),
+      )
+      const SPLIT = Object.fromEntries(Object.entries(MIX).map(([pair, mixed]) => [mixed, pair]))
+      const NO_HANGUL = { c: "", v: "", f: "" }
+      const syllable = ({ c, v, f }) =>
+        c && v
+          ? String.fromCharCode(0xac00 + (CHO.indexOf(c) * 21 + JUNG.indexOf(v)) * 28 + JONG.indexOf(f || " "))
+          : c || v
+      // Returns the new syllable and what to send for it.
+      const hangul = (s, j) => {
+        const edit = (next) => [next, (syllable(s) ? "\x7f" : "") + syllable(next)]
+        if (!JUNG.includes(j)) {
+          if (s.c && s.v && !s.f && JONG.includes(j)) return edit({ ...s, f: j })
+          if (s.f && MIX[s.f + j] && JONG.includes(MIX[s.f + j])) return edit({ ...s, f: MIX[s.f + j] })
+          return [{ c: j, v: "", f: "" }, j]
+        }
+        if (s.c && !s.v) return edit({ ...s, v: j })
+        if (s.v && !s.f && MIX[s.v + j]) return edit({ ...s, v: MIX[s.v + j] })
+        if (s.f) {
+          // The final moves to the next syllable: 갑 + ㅏ → 가바, 값 + ㅏ → 갑사.
+          const [keep, move] = SPLIT[s.f] ? [...SPLIT[s.f]] : ["", s.f]
+          const next = { c: move, v: j, f: "" }
+          return [next, "\x7f" + syllable({ ...s, f: keep }) + syllable(next)]
+        }
+        return [{ c: "", v: j, f: "" }, j]
+      }
+      const hangulBack = (s) => {
+        const next = s.f ? { ...s, f: SPLIT[s.f]?.[0] || "" } : s.v ? { ...s, v: SPLIT[s.v]?.[0] || "" } : NO_HANGUL
+        return [next, "\x7f" + syllable(next)]
+      }
+
+      const COMBOS = {
+        ctrl: [..."CDZLRAEUKW"].map((c) => [`Ctrl+${c}`, ctrlKey(c)]),
+        alt: [..."BFD."].map((c) => [`Alt+${c}`, "\x1b" + c.toLowerCase()]),
+        tab: [["Shift+Tab", "\x1b[Z"]],
+        left: [["Ctrl+←", "\x1b[1;5D"]],
+        right: [["Ctrl+→", "\x1b[1;5C"]],
+        up: [["Ctrl+↑", "\x1b[1;5A"]],
+        down: [["Ctrl+↓", "\x1b[1;5B"]],
+      }
+      for (const b of $("keys").children) {
+        if (COMBOS[b.dataset.key || b.dataset.mod]) b.classList.add("has-combos")
+      }
+
+      // Ctrl/Alt with the Korean keyboard up mean the key in the same place (ㅊ → c).
+      const KO = "ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔㅁㄴㅇㄹㅎㅗㅓㅏㅣㅋㅌㅊㅍㅠㅜㅡㅃㅉㄸㄲㅆㅒㅖ"
+      const EN = "qwertyuiopasdfghjklzxcvbnmqwertop"
+
+      let closeShell = () => {}
+      const shell = (s, creds = {}) => {
+        closeShell()
+        $("shell-title").textContent = s.name
+        $("shell").hidden = false
+        const box = $("term")
+        const term = new Terminal({
+          cursorBlink: true,
+          fontFamily: 'Menlo, Consolas, "DejaVu Sans Mono", monospace',
+          fontSize: 14,
+          lineHeight: 1.2,
+          theme: { background: "#1e1e1e" },
+        })
+        term.open(box)
+        const url = new URL(`${base}/remote-shell/${s.id}`, location.href)
+        url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
+        const ws = new WebSocket(url)
+        let opened = false
+        const send = (msg) => {
+          if (!opened || ws.readyState !== WebSocket.OPEN) return
+          if (typeof msg.d === "string") track(msg.d)
+          ws.send(JSON.stringify(msg))
+        }
+        // Autosuggest: follow what's typed on the prompt line and offer past commands
+        // that start with it. Arrows, Tab, Ctrl+… move the cursor in ways we can't
+        // follow, so suggestions stop until the next Enter.
+        const histKey = "history-" + s.id
+        const history = JSON.parse(storage(histKey) || "[]")
+        const ghost = $("ghost")
+        const suggest = $("suggest")
+        let line = ""
+        let lost = false
+        let hint = ""
+        // Text on the cursor row (with wrapped rows above) up to the cursor.
+        const screenLine = () => {
+          const b = term.buffer.active
+          let y = b.baseY + b.cursorY
+          let text = b.getLine(y)?.translateToString(true, 0, b.cursorX) || ""
+          while (y > 0 && b.getLine(y)?.isWrapped) text = b.getLine(--y).translateToString() + text
+          return text
+        }
+        const track = (d) => {
+          if (d === "\x1b[I" || d === "\x1b[O") return
+          if (d[0] === "\x1b") lost = true
+          else
+            for (const ch of d) {
+              if (ch === "\r") {
+                // Only echoed lines are kept, so passwords never land in history.
+                const cmd = line.trim()
+                if (!lost && cmd && screenLine().trimEnd().endsWith(line.trimEnd())) {
+                  const i = history.indexOf(cmd)
+                  if (i >= 0) history.splice(i, 1)
+                  history.unshift(cmd)
+                  history.length = Math.min(history.length, 500)
+                  storage(histKey, JSON.stringify(history))
+                }
+                line = ""
+                lost = false
+              } else if (ch === "\x03" || ch === "\x15") {
+                line = ""
+                lost = false
+              } else if (ch === "\x7f" || ch === "\b") line = [...line].slice(0, -1).join("")
+              else if (ch < " ") lost = true
+              else line += ch
+            }
+          if (lost) showHints()
+        }
+        // Called after output is drawn, so the typed text has been echoed.
+        const showHints = () => {
+          const b = term.buffer.active
+          const matches =
+            lost || line.trim().length < 2 || b.type === "alternate" || !screenLine().endsWith(line)
+              ? []
+              : [...new Set([...history, ...COMMON])].filter((c) => c.startsWith(line) && c !== line).slice(0, 5)
+          hint = matches[0] || ""
+          suggest.hidden = !hint
+          suggest.replaceChildren(
+            ...matches.map((m) => {
+              const c = el("button", "", m)
+              c.type = "button"
+              c.tabIndex = -1
+              c.onclick = () => line && m.startsWith(line) && input(m.slice(line.length))
+              return c
+            }),
+          )
+          const cell = term._core._renderService.dimensions.css.cell
+          ghost.hidden = !hint || b.viewportY !== b.baseY || !cell.width
+          if (ghost.hidden) return
+          const screen = box.querySelector(".xterm-screen").getBoundingClientRect()
+          const origin = box.getBoundingClientRect()
+          Object.assign(ghost.style, {
+            left: screen.left - origin.left + b.cursorX * cell.width + "px",
+            top: screen.top - origin.top + b.cursorY * cell.height + "px",
+            lineHeight: cell.height + "px",
+            maxWidth: (term.cols - b.cursorX) * cell.width + "px",
+          })
+          ghost.textContent = hint.slice(line.length)
+        }
+        const fit = () => {
+          // ponytail: private cell size, same as @xterm/addon-fit reads (the addon isn't shipped).
+          const cell = term._core._renderService.dimensions.css.cell
+          if (!cell.width || !cell.height) return
+          const cols = Math.max(2, Math.floor((box.clientWidth - 8) / cell.width))
+          const rows = Math.max(1, Math.floor((box.clientHeight - 8) / cell.height))
+          if (cols !== term.cols || rows !== term.rows) term.resize(cols, rows)
+        }
+        // Sticky Ctrl/Alt from the key bar apply to the next key, typed or tapped.
+        const keys = $("keys")
+        const mods = { ctrl: false, alt: false }
+        // Hangul syllable being typed on the on-screen keyboard; other input ends it.
+        let composing = NO_HANGUL
+        const setMod = (mod, on) => {
+          mods[mod] = on
+          keys.querySelector(`[data-mod="${mod}"]`).setAttribute("aria-pressed", on)
+        }
+        setMod("ctrl", false)
+        setMod("alt", false)
+        const input = (d, compose) => {
+          if (!compose) composing = NO_HANGUL
+          // Focus reports (apps like Claude Code ask for them) aren't key presses.
+          if (d === "\x1b[I" || d === "\x1b[O") return send({ d })
+          // xterm's touch scroll in mouse mode reports NaN coordinates; use the touched cell.
+          d = d.replace(/(\x1b\[<\d+;)NaN;NaN(?=[Mm])/g, (_, head) => {
+            const r = term.element.querySelector(".xterm-screen").getBoundingClientRect()
+            const cell = (p, start, size, n) => Math.min(Math.max(Math.floor(((p - start) / size) * n), 0), n - 1) + 1
+            const t = touchStart || { clientX: r.left, clientY: r.top }
+            return `${head}${cell(t.clientX, r.left, r.width, term.cols)};${cell(t.clientY, r.top, r.height, term.rows)}`
+          })
+          // → at the end of the line takes the suggestion, like fish.
+          if (hint && (d === "\x1b[C" || d === "\x1bOC")) d = hint.slice(line.length)
+          if ((mods.ctrl || mods.alt) && KO.includes(d)) d = EN[KO.indexOf(d)]
+          const c = d.length === 1 ? d.toUpperCase().charCodeAt(0) : 0
+          if (mods.ctrl && c >= 64 && c < 96) d = String.fromCharCode(c & 31)
+          if (mods.alt) d = "\x1b" + d
+          setMod("ctrl", false)
+          setMod("alt", false)
+          send({ d })
+        }
+        // Don't take focus from the terminal, or the soft keyboard closes.
+        const combos = $("combos")
+        keys.onmousedown = combos.onmousedown = suggest.onmousedown = (e) => e.preventDefault()
+        keys.oncontextmenu = (e) => e.preventDefault()
+        combos.hidden = true
+        let pressTimer
+        let longPressed = false
+        keys.onpointerdown = (e) => {
+          const b = e.target.closest("button")
+          const list = b && COMBOS[b.dataset.key || b.dataset.mod]
+          longPressed = false
+          clearTimeout(pressTimer)
+          if (!list) return
+          pressTimer = setTimeout(() => {
+            longPressed = true
+            combos.replaceChildren(
+              ...list.map(([label, seq]) => {
+                const c = el("button", "", label)
+                c.type = "button"
+                c.tabIndex = -1
+                c.onclick = () => {
+                  combos.hidden = true
+                  send({ d: seq })
+                }
+                return c
+              }),
+            )
+            combos.style.bottom = keys.offsetHeight + "px"
+            combos.hidden = false
+          }, 450)
+        }
+        // Scrolling the bar cancels the pointer.
+        keys.onpointerup = keys.onpointercancel = () => clearTimeout(pressTimer)
+        keys.onclick = (e) => {
+          const b = e.target.closest("button")
+          if (!b || longPressed) return
+          combos.hidden = true
+          if (b.dataset.mod) setMod(b.dataset.mod, !mods[b.dataset.mod])
+          else input(keySeq(b.dataset.key, term.modes.applicationCursorKeysMode))
+        }
+        // On touch screens the OS keyboard covers the terminal and mangles input
+        // (autocorrect, Korean jamo), so it stays closed and this one types instead.
+        const coarse = matchMedia("(pointer: coarse)").matches
+        if (coarse) term.textarea.setAttribute("inputmode", "none")
+        const kbd = $("kbd")
+        let layer = "abc"
+        let letters = "abc"
+        let shift = false
+        let repeat
+        const drawKbd = () =>
+          kbd.replaceChildren(
+            ...KBD[layer].map((row) => {
+              const r = el("div", "kbd-row")
+              r.append(
+                ...row.split(" ").map((k) => {
+                  const [label, name] =
+                    k === "lang"
+                      ? [layer === "ko" ? "EN" : "한", "한/영"]
+                      : k === "ABC"
+                        ? [letters === "ko" ? "가" : "ABC", "Letters"]
+                        : KBD_LABELS[k] || [shifted(k)]
+                  const b = el("button", "", label)
+                  b.type = "button"
+                  b.tabIndex = -1
+                  b.dataset.k = k
+                  if (name) b.setAttribute("aria-label", name)
+                  if (k === "shift") b.setAttribute("aria-pressed", shift)
+                  return b
+                }),
+              )
+              return r
+            }),
+          )
+        const shifted = (k) => (shift && (SHIFT_KO[k] || k.toUpperCase())) || k
+        const press = (k) => {
+          if (k === "shift" || k === "?123" || k === "ABC" || k === "lang") {
+            if (k === "shift") shift = !shift
+            else {
+              if (k === "lang") letters = layer === "ko" ? "abc" : "ko"
+              layer = k === "?123" ? "sym" : letters
+              composing = NO_HANGUL
+            }
+            return drawKbd()
+          }
+          // Each jamo rewrites the syllable on screen: backspace, then the new syllable.
+          const jamo = layer === "ko" && k.length === 1 && !mods.ctrl && !mods.alt
+          if (jamo || (k === "bksp" && syllable(composing))) {
+            const [next, out] = jamo ? hangul(composing, shifted(k)) : hangulBack(composing)
+            input(out, true)
+            composing = next
+          } else input({ bksp: "\x7f", space: " ", enter: "\r" }[k] ?? shifted(k))
+          if (shift && k.length === 1) {
+            shift = false
+            drawKbd()
+          }
+        }
+        drawKbd()
+        kbd.hidden = !coarse
+        // Keys act on press, not click, so fast typing doesn't drop taps.
+        kbd.onpointerdown = (e) => {
+          const b = e.target.closest("button")
+          if (!b) return
+          e.preventDefault()
+          b.classList.add("down")
+          setTimeout(() => b.classList.remove("down"), 100)
+          press(b.dataset.k)
+          if (b.dataset.k !== "bksp") return
+          const again = () => {
+            press("bksp")
+            repeat = setTimeout(again, 60)
+          }
+          repeat = setTimeout(again, 400)
+        }
+        kbd.onpointerup = kbd.onpointercancel = kbd.onpointerleave = () => clearTimeout(repeat)
+        kbd.oncontextmenu = kbd.onmousedown = (e) => e.preventDefault()
+        $("kbd-toggle").onclick = () => (kbd.hidden = !kbd.hidden)
+        term.onResize(({ cols, rows }) => send({ cols, rows }))
+        term.onData(input)
+        // xterm cancels touch events, so a tap never focuses it. Taps (not scrolls)
+        // focus it for hardware keyboards and bring the on-screen keyboard back.
+        let touchStart
+        box.ontouchstart = (e) => (touchStart = e.touches[0])
+        box.ontouchend = (e) => {
+          combos.hidden = true
+          const t = e.changedTouches[0]
+          if (!touchStart || Math.hypot(t.clientX - touchStart.clientX, t.clientY - touchStart.clientY) > 10) return
+          kbd.hidden = false
+          term.focus()
+        }
+        ws.onopen = () => {
+          fit()
+          // The first message logs in; credentials are not saved.
+          ws.send(JSON.stringify({ ...creds, cols: term.cols, rows: term.rows }))
+          opened = true
+        }
+        ws.onmessage = (e) => term.write(e.data, showHints)
+        ws.onclose = (e) => term.write(`\r\n\x1b[2m[${e.reason || "Connection closed"}]\x1b[0m\r\n`)
+        term.onScroll(showHints)
+        const ro = new ResizeObserver(fit)
+        ro.observe(box)
+        // Keep the key bar above the soft keyboard (iOS doesn't shrink fixed elements).
+        const vv = window.visualViewport
+        const onViewport = () => {
+          $("shell").style.top = vv.offsetTop + "px"
+          $("shell").style.height = vv.height + "px"
+        }
+        vv?.addEventListener("resize", onViewport)
+        vv?.addEventListener("scroll", onViewport)
+        if (vv) onViewport()
+        closeShell = () => {
+          closeShell = () => {}
+          vv?.removeEventListener("resize", onViewport)
+          vv?.removeEventListener("scroll", onViewport)
+          ro.disconnect()
+          clearTimeout(repeat)
+          ws.close()
+          term.dispose()
+          ghost.hidden = suggest.hidden = true
+          $("shell").hidden = true
+        }
+        term.focus()
+      }
+      $("shell-close").onclick = () => closeShell()
+
+      $("progress-cancel").onclick = async () => {
+        if (!connecting) return
+        connecting.cancelled = true
+        await request("POST", `${api}/${connecting.id}/disconnect`).catch(() => {})
+        toast("Connection cancelled")
+      }
+      // Escape would hide the dialog while the connection keeps going.
+      progress.addEventListener("cancel", (e) => e.preventDefault())
+
+      const openForm = (s) => {
+        editing = s
+        form.reset()
+        $("form-error").hidden = true
+        $("form-title").textContent = s ? "Edit server" : "Add server"
+        $("clear-password").hidden = !s?.hasPassword
+        form.password.placeholder = s?.hasPassword ? "(unchanged)" : "Ask on connect"
+        $("group-list").replaceChildren(
+          ...[...new Set(servers.map((s) => s.group).filter(Boolean))].map((g) => {
+            const o = el("option")
+            o.value = g
+            return o
+          }),
+        )
+        for (const key of ["name", "group", "host", "port", "user", "identityFile", "folder"]) {
+          form[key].value = (s && s[key]) || ""
+        }
+        dialog.showModal()
+      }
+
+      form.onsubmit = async (e) => {
+        e.preventDefault()
+        const body = Object.fromEntries(new FormData(form))
+        body.clearPassword = form.clearPassword.checked
+        try {
+          if (editing) await request("PUT", `${api}/${editing.id}`, body)
+          else await request("POST", api, body)
+          dialog.close()
+          toast(editing ? "Server updated" : "Server added")
+          load()
+        } catch (error) {
+          $("form-error").textContent = error.message
+          $("form-error").hidden = false
+        }
+      }
+
+      $("add").onclick = () => openForm()
+      document.querySelectorAll("[data-close]").forEach((b) => (b.onclick = () => b.closest("dialog").close()))
+      $("search").addEventListener("input", render)
+
+      const tick = () => {
+        const now = new Date()
+        $("clock").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+        $("date").textContent = now.toLocaleDateString([], {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          weekday: "long",
+        })
+      }
+      tick()
+      setInterval(tick, 10000)
+
+      load().then(() => {
+        const id = new URLSearchParams(location.search).get("connect")
+        const s = servers.find((s) => s.id === id)
+        if (s) connect(s)
+      })
+      loadStatus()
+      setInterval(() => !document.hidden && loadStatus(), STATUS_INTERVAL)
+      loadSystem()
+      setInterval(() => !document.hidden && loadSystem(), 3000)
+      // Keep connection status fresh (e.g. a session dropped in another tab).
+      setInterval(() => !connecting && !document.hidden && load(), 15000)
+    </script>
+  </body>
+</html>

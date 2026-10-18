@@ -9,7 +9,7 @@ import { getCookieSessionName, HttpCode, HttpError } from "../../common/http"
 import { plural } from "../../common/util"
 import { App } from "../app"
 import { AuthType, DefaultedArgs } from "../cli"
-import { commit, rootPath } from "../constants"
+import { rootPath } from "../constants"
 import { Heart } from "../heart"
 import { redirect } from "../http"
 import { CoderSettings, SettingsProvider } from "../settings"
@@ -22,6 +22,7 @@ import * as health from "./health"
 import * as login from "./login"
 import * as logout from "./logout"
 import * as pathProxy from "./pathProxy"
+import * as remote from "./remote"
 import * as update from "./update"
 import * as vscode from "./vscode"
 
@@ -132,13 +133,25 @@ export const register = async (
     })
   })
 
+  // SSH remote servers (before the body parsers so bodies are proxied intact).
+  app.router.all("/remote/:id{/*path}", async (req, res) => {
+    await remote.proxy(req, res)
+  })
+  app.wsRouter.get("/remote/:id{/*path}", async (req) => {
+    await remote.wsProxy(req as unknown as WebsocketRequest)
+  })
+  app.wsRouter.get("/remote-shell/:id", async (req) => {
+    await remote.wsShell(req as unknown as WebsocketRequest)
+  })
+
   app.router.use(express.json())
   app.router.use(express.urlencoded({ extended: true }))
 
   app.router.use(
     "/_static",
     express.static(rootPath, {
-      cacheControl: commit !== "development",
+      // max-age=0, also in dev: without a header CDNs like Cloudflare cache assets for hours.
+      cacheControl: true,
       fallthrough: false,
       setHeaders: (res, path, stat) => {
         // The service worker is served from a sub-path on the static route so
@@ -163,6 +176,9 @@ export const register = async (
   }
 
   app.router.use("/update", update.router)
+
+  // Server list at the root; the local editor stays at /vscode.
+  app.router.use("/", remote.router)
 
   // For historic reasons we also load at /vscode because the root was replaced
   // by a plugin in v1 of Coder.  The plugin system (which was for internal use

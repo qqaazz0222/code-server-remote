@@ -1,0 +1,1069 @@
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.topbar {
+  align-items: center;
+  background: rgba(44, 44, 44, 0.92);
+  display: flex;
+  height: 46px;
+  justify-content: space-between;
+  padding: 0 16px 0 20px;
+}
+
+.topbar .brand {
+  align-items: center;
+  display: flex;
+  font-size: 0.875rem;
+  font-weight: 500;
+  gap: 10px;
+}
+
+.topbar .brand img {
+  height: 20px;
+  width: 20px;
+}
+
+.page {
+  box-sizing: border-box;
+  display: grid;
+  flex: 1;
+  gap: 16px;
+  grid-template-columns: 340px minmax(0, 1fr);
+  margin: 0 auto;
+  max-width: 1400px;
+  padding: 34px 32px;
+  width: 100%;
+}
+
+.side,
+.main {
+  align-content: start;
+  display: grid;
+  gap: 16px;
+}
+
+/* Widgets. */
+.side .widget {
+  padding: 20px;
+}
+
+.clock {
+  font-size: 2rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+}
+
+.date {
+  color: var(--text-2);
+  font-size: 0.875rem;
+  margin-top: 12px;
+}
+
+.w-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.w-head h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.w-meta {
+  color: var(--text-2);
+  font-size: 0.8rem;
+}
+
+.gauges {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+}
+
+.gauge {
+  --p: 0;
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8rem;
+  gap: 2px;
+}
+
+/* 280° arc open at the bottom. */
+.ring {
+  align-items: center;
+  border-radius: 50%;
+  display: flex;
+  height: 92px;
+  justify-content: center;
+  position: relative;
+  width: 92px;
+}
+
+.ring::before {
+  background: conic-gradient(
+    from 220deg,
+    var(--success) calc(var(--p) * 280deg),
+    rgba(255, 255, 255, 0.14) 0 280deg,
+    transparent 0
+  );
+  border-radius: 50%;
+  content: "";
+  inset: 0;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px));
+  position: absolute;
+}
+
+.ring .value {
+  font-size: 1.35rem;
+  font-weight: 500;
+}
+
+.ring .value small {
+  font-size: 0.7rem;
+  margin-left: 1px;
+}
+
+.gauge .label {
+  margin-top: -14px;
+}
+
+.gauge .detail {
+  color: var(--text-2);
+  margin-top: 6px;
+}
+
+.ips {
+  display: grid;
+  font-size: 0.8rem;
+  gap: 6px;
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.ips:empty {
+  display: none;
+}
+
+.ips li {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.ips .if {
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ips .ip {
+  font-variant-numeric: tabular-nums;
+  user-select: all;
+}
+
+/* Network histogram. Up/down hues validated against the dark surface. */
+:root {
+  --up: #d95926;
+  --down: #3987e5;
+}
+
+.net-chart {
+  display: flex;
+  gap: 8px;
+  height: 100px;
+}
+
+.net-axis {
+  color: var(--text-3);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+  justify-content: space-between;
+  min-width: 40px;
+  text-align: right;
+}
+
+.net-chart svg {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+}
+
+.net-chart .grid {
+  stroke: var(--line);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.net-chart .base {
+  stroke: rgba(255, 255, 255, 0.3);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.net-chart .up {
+  fill: var(--up);
+}
+
+.net-chart .down {
+  fill: var(--down);
+}
+
+.net-chart .hit {
+  fill: transparent;
+}
+
+.net-chart .hit:hover {
+  fill: rgba(255, 255, 255, 0.08);
+}
+
+.net-legend {
+  color: var(--text-2);
+  display: flex;
+  font-size: 0.8rem;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.net-legend b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.net-legend .sw {
+  border-radius: 2px;
+  display: inline-block;
+  height: 8px;
+  margin-right: 6px;
+  width: 8px;
+}
+
+.net-legend .sw.up {
+  background: var(--up);
+}
+
+.net-legend .sw.down {
+  background: var(--down);
+}
+
+.storage {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+}
+
+.storage .disk {
+  height: 56px;
+  width: 56px;
+}
+
+.storage-text {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  gap: 4px;
+}
+
+.bar {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 99px;
+  height: 10px;
+  margin-top: 16px;
+  overflow: hidden;
+}
+
+.bar > span {
+  --p: 0;
+  background: var(--primary);
+  border-radius: 99px;
+  display: block;
+  height: 100%;
+  width: calc(var(--p) * 100%);
+}
+
+.sessions {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sessions li {
+  align-items: center;
+  display: flex;
+  font-size: 0.875rem;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.sessions .name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sessions .none {
+  color: var(--text-3);
+}
+
+.dot {
+  background: var(--success);
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+  height: 8px;
+  width: 8px;
+}
+
+/* Search. */
+.search {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  padding: 0 16px;
+}
+
+.search svg {
+  color: var(--text-3);
+  flex: none;
+  height: 16px;
+  width: 16px;
+}
+
+.search input {
+  background: none;
+  border: none;
+  color: var(--text);
+  flex: 1;
+  font-size: 0.875rem;
+  min-width: 0;
+  outline: none;
+  padding: 17px 0;
+}
+
+.search input::placeholder {
+  color: var(--text-3);
+}
+
+.search:focus-within {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.section-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.section-head h1 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.section-head .icon-btn {
+  color: var(--text);
+}
+
+.section-head .icon-btn svg {
+  height: 22px;
+  width: 22px;
+}
+
+/* Groups. */
+.groups {
+  display: grid;
+  gap: 20px;
+}
+
+.group-sec > summary {
+  align-items: center;
+  border-radius: 6px;
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.85rem;
+  font-weight: 600;
+  gap: 8px;
+  list-style: none;
+  margin-bottom: 12px;
+  user-select: none;
+  width: max-content;
+}
+
+.group-sec > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Chevron. */
+.group-sec > summary::before {
+  border-bottom: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  content: "";
+  height: 6px;
+  margin: 0 2px;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+  width: 6px;
+}
+
+.group-sec[open] > summary::before {
+  transform: rotate(45deg) translate(-2px, -2px);
+}
+
+.group-sec > summary:hover {
+  color: var(--text);
+}
+
+.group-sec > summary:focus-visible {
+  outline: 2px solid var(--primary-soft);
+  outline-offset: 2px;
+}
+
+.group-sec .count {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+  color: var(--text-2);
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 2px 8px;
+}
+
+/* App tiles. */
+.grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tile {
+  aspect-ratio: 1;
+  position: relative;
+  transition: background 0.15s;
+}
+
+.tile:hover,
+.tile:focus-within {
+  background: var(--surface-hover);
+}
+
+.tile-main {
+  align-items: center;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  height: 100%;
+  justify-content: center;
+  padding: 12px;
+  text-align: center;
+  width: 100%;
+}
+
+.tile-main:focus-visible {
+  outline: 2px solid var(--primary-soft);
+  outline-offset: -2px;
+}
+
+.avatar {
+  align-items: center;
+  background: linear-gradient(160deg, hsl(var(--hue, 230), 90%, 66%), hsl(calc(var(--hue, 230) + 25), 80%, 50%));
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  display: flex;
+  font-size: 1.6rem;
+  font-weight: 600;
+  height: 64px;
+  justify-content: center;
+  margin-bottom: 14px;
+  width: 64px;
+}
+
+/* Reachability badge on the avatar's corner. */
+.avatar {
+  position: relative;
+}
+
+.avatar .status {
+  border: 3px solid #1b1b1b;
+  border-radius: 50%;
+  bottom: -4px;
+  height: 12px;
+  position: absolute;
+  right: -4px;
+  width: 12px;
+}
+
+.status.online {
+  background: var(--success);
+}
+
+.status.offline {
+  background: var(--danger);
+}
+
+.status.unknown {
+  background: var(--text-3);
+}
+
+.avatar svg {
+  height: 32px;
+  width: 32px;
+}
+
+.avatar.local {
+  background: linear-gradient(160deg, #6aa8ff, #3d5cf5);
+}
+
+.tile .name {
+  align-items: center;
+  display: flex;
+  font-size: 0.875rem;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.tile .name,
+.tile .addr {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile .user {
+  color: var(--text-2);
+  font-size: 0.8rem;
+  margin-top: 2px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile .addr {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  max-width: 100%;
+}
+
+.tile-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  transition: opacity 0.15s;
+}
+
+.tile:hover .tile-actions,
+.tile:focus-within .tile-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .tile-actions {
+    opacity: 1;
+  }
+}
+
+.tile-actions .icon-btn,
+.sessions .icon-btn {
+  height: 28px;
+  width: 28px;
+}
+
+.tile-actions .icon-btn svg,
+.sessions .icon-btn svg {
+  height: 15px;
+  width: 15px;
+}
+
+.icon-btn.danger:hover {
+  color: var(--danger);
+}
+
+.empty {
+  color: var(--text-3);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.empty[hidden] {
+  display: none;
+}
+
+.footer {
+  color: var(--text-2);
+  font-size: 0.8rem;
+  padding: 0 32px calc(20px + env(safe-area-inset-bottom));
+}
+
+/* Light dialogs, like ZimaOS settings. */
+.sheet {
+  background: var(--l-panel);
+  border: none;
+  border-radius: var(--radius-lg);
+  box-sizing: border-box;
+  max-width: 480px;
+  padding: 0;
+  width: calc(100% - 32px);
+}
+
+.sheet::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.sheet-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  padding: 20px 20px 4px 24px;
+}
+
+.sheet-head h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.sheet-body {
+  padding: 12px 20px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form .group {
+  background: var(--l-bg);
+  border: 1px solid var(--l-line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.form label {
+  color: var(--l-text-2);
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8rem;
+  gap: 6px;
+}
+
+.form .cols {
+  display: flex;
+  gap: 12px;
+}
+
+.form .cols > .port {
+  width: 90px;
+}
+
+.form .cols > .grow {
+  flex: 1;
+}
+
+.form label.check {
+  align-items: center;
+  color: var(--l-text);
+  flex-direction: row;
+}
+
+.form label[hidden],
+.form .error[hidden] {
+  display: none;
+}
+
+.form .error {
+  color: var(--danger);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+/* The login dialog has no groups; give its fields a card too. */
+#login-form .form {
+  background: var(--l-bg);
+  border: 1px solid var(--l-line);
+  border-radius: 12px;
+  gap: 12px;
+  margin: 12px 20px;
+  padding: 16px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 4px 20px 20px;
+}
+
+.progress-row {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+}
+
+.progress-row .spinner {
+  flex: none;
+}
+
+.muted {
+  color: var(--l-text-2);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.log {
+  background: var(--l-bg);
+  border: 1px solid var(--l-line);
+  border-radius: 12px;
+  color: var(--l-text-2);
+  font-size: 0.75rem;
+  height: 180px;
+  margin: 14px 0 0;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log:empty::before {
+  color: var(--l-text-3);
+  content: "Waiting for output…";
+}
+
+.toast {
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  background: rgba(30, 30, 30, 0.92);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  font-size: 0.875rem;
+  left: 50%;
+  max-width: calc(100% - 32px);
+  padding: 12px 18px;
+  position: fixed;
+  transform: translateX(-50%);
+  white-space: pre-wrap;
+  width: max-content;
+}
+
+.toast[hidden] {
+  display: none;
+}
+
+.toast.error {
+  border-color: rgba(229, 72, 77, 0.6);
+}
+
+@media (max-width: 900px) {
+  .page {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  .side {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  }
+
+  .footer {
+    padding: 0 16px calc(16px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 600px) {
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+}
+
+/* Connection mode choice. */
+.modes {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 20px;
+}
+
+.mode {
+  align-items: center;
+  background: var(--l-bg);
+  border: 1px solid var(--l-line);
+  border-radius: 12px;
+  color: var(--l-text);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 14px;
+  padding: 14px 16px;
+  text-align: left;
+}
+
+.mode:hover,
+.mode:focus-visible {
+  border-color: var(--primary);
+}
+
+.mode svg {
+  flex: none;
+  height: 24px;
+  width: 24px;
+}
+
+.mode span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mode small {
+  color: var(--l-text-2);
+  font-size: 0.8rem;
+}
+
+/* Full-screen SSH shell. */
+.shell {
+  background: #1e1e1e;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+  z-index: 10;
+}
+
+.shell[hidden] {
+  display: none;
+}
+
+/* iOS's translucent keyboard accessory bar shows what's behind the shell. */
+body:has(> .shell:not([hidden])) {
+  background: #000;
+}
+
+body:has(> .shell:not([hidden])) > :not(.shell) {
+  visibility: hidden;
+}
+
+.shell-head {
+  align-items: center;
+  background: rgba(44, 44, 44, 0.92);
+  display: flex;
+  font-size: 0.875rem;
+  height: 40px;
+  justify-content: space-between;
+  padding: 0 8px 0 16px;
+}
+
+.term {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 4px;
+}
+
+.keys {
+  background: rgba(44, 44, 44, 0.92);
+  display: none;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  scrollbar-width: none;
+}
+
+@media (pointer: coarse) {
+  .keys {
+    display: flex;
+  }
+}
+
+.keys button {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  flex: none;
+  font: inherit;
+  font-size: 0.85rem;
+  height: 36px;
+  min-width: 44px;
+  padding: 0 10px;
+  touch-action: manipulation;
+}
+
+.keys button:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.keys button[aria-pressed="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+/* A dot marks keys with a long-press menu. */
+.keys button.has-combos {
+  background-image: radial-gradient(circle, var(--text-3) 2px, transparent 2.5px);
+  background-position: top 3px right 3px;
+  background-repeat: no-repeat;
+  background-size: 6px 6px;
+}
+
+.combos {
+  border-bottom: 1px solid var(--line);
+  left: 0;
+  position: absolute;
+  right: 0;
+}
+
+.combos[hidden] {
+  display: none;
+}
+
+/* Autosuggest: dimmed rest of the top suggestion after the cursor. */
+.term {
+  position: relative;
+}
+
+.ghost {
+  color: rgba(255, 255, 255, 0.35);
+  font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 14px;
+  overflow: hidden;
+  pointer-events: none;
+  position: absolute;
+  white-space: pre;
+  z-index: 5;
+}
+
+.ghost[hidden],
+.suggest[hidden] {
+  display: none;
+}
+
+/* Shown on every screen, unlike the key bar. */
+.suggest {
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  padding-bottom: 6px;
+}
+
+.suggest button {
+  font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  height: 30px;
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* On-screen keyboard, touch screens only. */
+.kbd,
+.kbd-toggle {
+  display: none;
+}
+
+.kbd {
+  -webkit-user-select: none;
+  user-select: none;
+  background: rgba(44, 44, 44, 0.92);
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 3px calc(6px + env(safe-area-inset-bottom));
+}
+
+@media (pointer: coarse) {
+  .kbd,
+  .kbd-toggle {
+    display: flex;
+  }
+
+  .shell:has(.kbd:not([hidden])) .keys {
+    padding-bottom: 6px;
+  }
+}
+
+.kbd[hidden] {
+  display: none;
+}
+
+.kbd-row {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+.kbd button {
+  -webkit-touch-callout: none;
+  background: rgba(255, 255, 255, 0.14);
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  flex: 1 1 0;
+  font: inherit;
+  font-size: 1.05rem;
+  /* Shorter keys in landscape so the terminal keeps some rows. */
+  height: clamp(28px, 6.5dvh, 42px);
+  min-width: 0;
+  padding: 0;
+  touch-action: manipulation;
+}
+
+.kbd button:is([data-k="shift"], [data-k="bksp"], [data-k="?123"], [data-k="ABC"], [data-k="lang"], [data-k="enter"]) {
+  background: rgba(255, 255, 255, 0.07);
+  flex-grow: 1.5;
+  font-size: 0.9rem;
+}
+
+.kbd button[data-k="space"] {
+  flex-grow: 5;
+}
+
+.kbd button.down {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.kbd button[aria-pressed="true"] {
+  background: var(--primary);
+}
+
+.shell-actions {
+  display: flex;
+  gap: 4px;
+}

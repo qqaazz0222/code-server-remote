@@ -18,37 +18,57 @@
     <link rel="apple-touch-icon" sizes="192x192" href="{{CS_STATIC_BASE}}/src/browser/media/pwa-icon-192.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="{{CS_STATIC_BASE}}/src/browser/media/pwa-icon-512.png" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/login.css" rel="stylesheet" />
     <meta id="coder-options" data-settings="{{OPTIONS}}" />
   </head>
   <body>
     <div class="center-container">
-      <div class="card-box">
-        <div class="header">
-          <h1 class="main">{{WELCOME_TEXT}}</h1>
-          <div class="sub">{{I18N_LOGIN_BELOW}} {{PASSWORD_MSG}}</div>
+      <main class="login card">
+        <div class="top">
+          <div>
+            <h1 class="title">{{WELCOME_TEXT}}</h1>
+            <p class="sub">{{I18N_LOGIN_BELOW}} {{PASSWORD_MSG}}</p>
+          </div>
+          <div class="logo-tile"><img src="{{CS_STATIC_BASE}}/src/browser/media/favicon.svg" alt="" /></div>
         </div>
-        <div class="content">
-          <form class="login-form" method="post">
-            <input class="user" type="text" autocomplete="username" />
-            <input id="base" type="hidden" name="base" value="{{BASE}}" />
-            <input id="href" type="hidden" name="href" value="" />
-            <div class="field">
+        <form class="login-form" method="post">
+          <input class="user" type="text" autocomplete="username" />
+          <input id="base" type="hidden" name="base" value="{{BASE}}" />
+          <input id="href" type="hidden" name="href" value="" />
+          <div class="fields">
+            <div class="row">
               <input
                 required
                 autofocus
-                class="password"
+                class="password field"
                 type="password"
                 placeholder="{{I18N_PASSWORD_PLACEHOLDER}}"
                 name="password"
                 autocomplete="current-password"
               />
-              <input class="submit -button" value="{{I18N_SUBMIT}}" type="submit" />
+              <button class="toggle icon-btn" type="button" aria-label="Show password">
+                <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path
+                    d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M1 1l22 22"
+                  />
+                </svg>
+              </button>
             </div>
+            <p class="hint" hidden>Caps Lock is on</p>
             {{ERROR}}
-          </form>
-        </div>
-      </div>
+          </div>
+          <button class="submit btn round" type="submit" aria-label="{{I18N_SUBMIT}}" title="{{I18N_SUBMIT}}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          </button>
+        </form>
+      </main>
     </div>
     <script>
       // Inform the backend about the path since the proxy might have rewritten
@@ -57,6 +77,26 @@
       if (el) {
         el.value = location.href
       }
+
+      // Keep "code-server" on one line.
+      const title = document.querySelector(".title")
+      title.textContent = title.textContent.replace(/-/g, "\u2011")
+
+      const password = document.querySelector(".password")
+      const toggle = document.querySelector(".toggle")
+      const hint = document.querySelector(".hint")
+      toggle.addEventListener("click", () => {
+        const show = password.type === "password"
+        password.type = show ? "text" : "password"
+        toggle.classList.toggle("on", show)
+        toggle.setAttribute("aria-label", show ? "Hide password" : "Show password")
+        password.focus()
+      })
+      const caps = (e) => {
+        if (e.getModifierState) hint.hidden = !e.getModifierState("CapsLock")
+      }
+      password.addEventListener("keydown", caps)
+      password.addEventListener("keyup", caps)
     </script>
   </body>
 </html>
