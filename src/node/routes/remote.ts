@@ -257,13 +257,16 @@ async function status(server: RemoteServer): Promise<{ online: boolean | null; m
   return { online: ms !== undefined, ms }
 }
 
+/** Quote a remote path for sh; a leading ~ stays outside the quotes so it expands. */
+export function quotePath(p: string): string {
+  const [, home, rest] = /^(~(?:\/|$))?([\s\S]*)$/.exec(p)!
+  return `${home ? '"$HOME"/' : ""}'${rest.replace(/'/g, "'\\''")}'`
+}
+
 /** Login shell on the remote, starting in the given folder if set. */
 export function shellCommand(folder?: string): string | undefined {
-  if (!folder) return undefined
-  // A leading ~ stays outside the quotes so the remote shell expands it. A missing
-  // folder prints an error and the shell opens in $HOME instead of exiting.
-  const [, home, rest] = /^(~(?:\/|$))?([\s\S]*)$/.exec(folder)!
-  return `cd ${home ? '"$HOME"/' : ""}'${rest.replace(/'/g, "'\\''")}'; exec "$SHELL" -l`
+  // A missing folder prints an error and the shell opens in $HOME instead of exiting.
+  return folder && `cd ${quotePath(folder)}; exec "$SHELL" -l`
 }
 
 /** Credentials typed on the launcher apply to this connection only (not saved). */
@@ -276,6 +279,13 @@ function withCredentials(saved: RemoteServer, body: any): RemoteServer {
   return { ...saved, user: user || saved.user, password: password || saved.password }
 }
 
+/**
+ * Per launcher instance, so two launchers (e.g. test and production) on one
+ * host don't replace each other's remote sockets.
+ */
+const instanceId = (req: Request) =>
+  crypto.createHash("sha1").update(req.args["user-data-dir"]).digest("hex").slice(0, 8)
+
 async function connect(req: Request, server: RemoteServer): Promise<Session> {
   const existing = sessions.get(server.id)
   if (existing) {
@@ -283,10 +293,8 @@ async function connect(req: Request, server: RemoteServer): Promise<Session> {
   }
 
   const port = await freePort()
-  // Per instance, so two launchers (e.g. test and production) on one host don't
-  // replace each other's remote code-server. Hex only, so safe unescaped.
-  const instance = crypto.createHash("sha1").update(req.args["user-data-dir"]).digest("hex").slice(0, 8)
-  const socket = `/tmp/code-server-remote-${instance}-${server.id}.sock`
+  // Hex only, so safe unescaped.
+  const socket = `/tmp/code-server-remote-${instanceId(req)}-${server.id}.sock`
   const { args, env } = await sshCommand(
     req,
     server,
@@ -489,6 +497,165 @@ router.get("/remote-servers/:id/log", (req, res) => {
 router.post("/remote-servers/:id/disconnect", async (req, res) => {
   disconnect(req.params.id)
   res.json({})
+})
+
+/**
+ * File browser over ssh. `open` logs in once and leaves a multiplexed master
+ * connection behind; listing and reading reuse it, so they need no credentials
+ * (servers with a saved password or key also work without it).
+ */
+const filesArgs = (req: Request, server: RemoteServer, master: boolean) => [
+  "-T",
+  "-o",
+  `ControlPath=/tmp/cs-files-${instanceId(req)}-${server.id}`,
+  "-o",
+  master ? "ControlMaster=auto" : "ControlMaster=no",
+  "-o",
+  "ControlPersist=15m",
+]
+
+/** Path query parameter; relative paths are relative to the remote home. */
+function filesPath(q: unknown): string {
+  const p = typeof q === "string" && q ? q : "~"
+  if (p.length > 4096 || /[\0\n\r]/.test(p)) {
+    throw new HttpError("Invalid path", HttpCode.BadRequest)
+  }
+  return p
+}
+
+// Exit codes from the remote commands below; 255 is ssh itself failing.
+const NOT_FOUND = 3
+const filesError = (code: number | null, stderr: string): HttpError =>
+  code === 255
+    ? new HttpError("Not signed in to this server", HttpCode.Unauthorized)
+    : code === NOT_FOUND
+      ? new HttpError("Not found or no permission", HttpCode.NotFound)
+      : new HttpError(stderr.trim().split("\n").pop() || `Failed (exit ${code})`, HttpCode.ServerError)
+
+async function filesRun(req: Request, server: RemoteServer, command: string) {
+  const { args, env } = await sshCommand(req, server, filesArgs(req, server, false), command)
+  const proc = spawn("ssh", args, { env, stdio: ["ignore", "pipe", "pipe"] })
+  const stdout: Buffer[] = []
+  let stderr = ""
+  proc.stdout!.on("data", (d: Buffer) => stdout.push(d))
+  proc.stderr!.on("data", (d) => (stderr += d))
+  const code = await new Promise<number | null>((resolve) => {
+    proc.on("error", () => resolve(255))
+    proc.on("close", resolve)
+  })
+  if (code !== 0) throw filesError(code, stderr)
+  return Buffer.concat(stdout).toString("utf8")
+}
+
+/** Remote command printing the folder's absolute path, then its entries. */
+export const listCommand = (p: string) =>
+  `cd ${quotePath(p)} || exit ${NOT_FOUND}; pwd; find . -mindepth 1 -maxdepth 1 -printf '%Y\\t%y\\t%s\\t%T@\\t%f\\0' 2>/dev/null; exit 0`
+
+/** Remote command printing a file, or its first `max` bytes. */
+export const readCommand = (p: string, max = 0) =>
+  `[ -f ${quotePath(p)} ] || exit ${NOT_FOUND}; ${max > 0 ? `head -c ${max}` : "cat"} -- ${quotePath(p)}`
+
+export interface FileEntry {
+  name: string
+  dir: boolean
+  link: boolean
+  size: number
+  mtime: number
+}
+
+/** Parse `pwd` then NUL-terminated `find -printf '%Y\t%y\t%s\t%T@\t%f\0'` lines. */
+export function parseListing(out: string): { path: string; entries: FileEntry[] } {
+  const nl = out.indexOf("\n")
+  const entries = out
+    .slice(nl + 1)
+    .split("\0")
+    .filter(Boolean)
+    .map((line) => {
+      const [type, own, size, mtime, ...name] = line.split("\t")
+      return {
+        name: name.join("\t"),
+        dir: type === "d",
+        link: own === "l",
+        size: Number(size),
+        mtime: Math.round(Number(mtime) * 1000),
+      }
+    })
+  return { path: out.slice(0, nl), entries }
+}
+
+router.post("/remote-servers/:id/files/open", async (req, res) => {
+  const server = withCredentials(await getServer(req), req.body)
+  const { args, env } = await sshCommand(req, server, filesArgs(req, server, true), "true")
+  // The master stays in the background holding ssh's fds, so wait for exit, not close.
+  const proc = spawn("ssh", args, { env, stdio: ["ignore", "ignore", "pipe"] })
+  let stderr = ""
+  proc.stderr!.on("data", (d) => (stderr += d))
+  const code = await new Promise<number | null>((resolve) => {
+    proc.on("error", () => resolve(255))
+    proc.on("exit", resolve)
+  })
+  if (code !== 0) {
+    throw new HttpError(stderr.trim().split("\n").pop() || "ssh failed", HttpCode.ServerError)
+  }
+  res.json({})
+})
+
+router.get("/remote-servers/:id/files", async (req, res) => {
+  const out = await filesRun(req, await getServer(req), listCommand(filesPath(req.query.path)))
+  res.json(parseListing(out))
+})
+
+// Previewable in the browser; everything else is sent as plain text.
+const MEDIA_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+}
+
+router.get("/remote-servers/:id/files/raw", async (req, res) => {
+  const p = filesPath(req.query.path)
+  const max = Math.max(0, Math.floor(Number(req.query.max)) || 0)
+  const server = await getServer(req)
+  const { args, env } = await sshCommand(req, server, filesArgs(req, server, false), readCommand(p, max))
+  const proc = spawn("ssh", args, { env, stdio: ["ignore", "pipe", "pipe"] })
+  req.on("close", () => proc.kill())
+  const name = path.posix.basename(p)
+  const headers = {
+    "Content-Type": req.query.download
+      ? "application/octet-stream"
+      : MEDIA_TYPES[path.extname(name).slice(1).toLowerCase()] || "text/plain; charset=utf-8",
+    // Remote content must never run as part of this origin.
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": "sandbox",
+    ...(req.query.download && { "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(name)}` }),
+  }
+  // Headers wait for the first byte so a failure can still be an error status.
+  let started = false
+  let stderr = ""
+  proc.stderr!.on("data", (d) => (stderr += d))
+  proc.stdout!.once("data", (chunk) => {
+    started = true
+    res.writeHead(200, headers)
+    res.write(chunk)
+    proc.stdout!.pipe(res)
+  })
+  const finish = (code: number | null) => {
+    // A spawn error can be followed by close; only the first answer counts.
+    if (started || res.headersSent) {
+      return
+    }
+    if (code === 0) {
+      res.writeHead(200, headers).end()
+    } else {
+      const error = filesError(code, stderr)
+      res.status(error.statusCode).json({ error: error.message })
+    }
+  }
+  proc.on("error", () => finish(255))
+  proc.on("close", finish)
 })
 
 /** Proxy /remote/<id>/* to the forwarded remote code-server. */

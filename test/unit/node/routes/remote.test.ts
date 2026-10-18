@@ -3,7 +3,7 @@ import * as fs from "fs"
 import * as net from "net"
 import * as os from "os"
 import * as path from "path"
-import { parseEntries, parseServer, probe, shellCommand } from "../../../../src/node/routes/remote"
+import { listCommand, parseEntries, parseListing, parseServer, probe, readCommand, shellCommand } from "../../../../src/node/routes/remote"
 import * as httpserver from "../../../utils/httpserver"
 import * as integration from "../../../utils/integration"
 
@@ -56,6 +56,31 @@ describe("remote servers", () => {
     expect(run("~/it's $(x)")).toBe(folder)
   })
 
+  it("should list and read remote files", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "files-"))
+    const dir = path.join(home, "it's $(x)")
+    fs.mkdirSync(path.join(dir, "sub"), { recursive: true })
+    fs.writeFileSync(path.join(dir, "a\tb.txt"), "hello")
+    fs.writeFileSync(path.join(dir, ".hidden"), "")
+    fs.symlinkSync("sub", path.join(dir, "link"))
+    const sh = (cmd: string) => execFileSync("sh", ["-c", cmd], { encoding: "utf8", env: { ...process.env, HOME: home } })
+
+    const { path: cwd, entries } = parseListing(sh(listCommand("~/it's $(x)")))
+    expect(cwd).toBe(fs.realpathSync(dir))
+    const byName = Object.fromEntries(entries.map((e) => [e.name, e]))
+    expect(Object.keys(byName).sort()).toEqual([".hidden", "a\tb.txt", "link", "sub"])
+    expect(byName["a\tb.txt"]).toMatchObject({ dir: false, link: false, size: 5 })
+    expect(byName.sub).toMatchObject({ dir: true, link: false })
+    expect(byName.link).toMatchObject({ dir: true, link: true })
+    expect(byName.sub.mtime).toBeGreaterThan(Date.now() - 60_000)
+
+    expect(sh(readCommand(path.join(dir, "a\tb.txt")))).toBe("hello")
+    expect(sh(readCommand(path.join(dir, "a\tb.txt"), 2))).toBe("he")
+    // Missing paths and folders exit 3, which the routes report as 404.
+    expect(() => sh(listCommand("~/missing"))).toThrow(expect.objectContaining({ status: 3 }))
+    expect(() => sh(readCommand(path.join(dir, "sub")))).toThrow(expect.objectContaining({ status: 3 }))
+  })
+
   it("should probe TCP ports", async () => {
     const srv = net.createServer().listen(0, "127.0.0.1")
     await new Promise((r) => srv.once("listening", r))
@@ -105,6 +130,10 @@ describe("remote servers", () => {
     const status = await resp.json()
     expect(Object.keys(status)).toEqual(["local", id])
     expect(typeof status[id].online).toBe("boolean")
+
+    // Paths are validated before anything runs over ssh.
+    resp = await codeServer.fetch(`/remote-servers/${id}/files`, undefined, { path: "/a\nb" })
+    expect(resp.status).toBe(400)
 
     resp = await json("GET", `/remote-servers/${id}/log`)
     expect(await resp.json()).toEqual({ log: [] })

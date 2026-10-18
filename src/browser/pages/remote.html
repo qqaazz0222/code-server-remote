@@ -15,7 +15,7 @@
     <link rel="manifest" href="{{BASE}}/manifest.json" crossorigin="use-credentials" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
-    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=11" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=12" rel="stylesheet" />
     <!-- Shipped with VS Code; used by the SSH shell. -->
     <link href="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/css/xterm.css" rel="stylesheet" />
     <script defer src="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -146,6 +146,12 @@
           </svg>
           <span><b>SSH Shell</b><small>Open a terminal on the host</small></span>
         </button>
+        <button type="button" class="mode" data-mode="files">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          </svg>
+          <span><b>Files</b><small>Browse and preview files on the host</small></span>
+        </button>
       </div>
       <!-- Folder the chosen mode starts in. -->
       <div class="sheet-body entries">
@@ -209,6 +215,48 @@
       </div>
       <!-- On-screen keyboard used instead of the OS one on touch screens. -->
       <div id="kbd" class="kbd" role="group" aria-label="Keyboard"></div>
+    </div>
+
+    <!-- Read-only file browser over ssh; shares the shell's look. -->
+    <div id="files" class="shell files" hidden>
+      <div class="shell-head">
+        <nav id="files-crumbs" class="crumbs" aria-label="Path"></nav>
+        <span class="shell-actions">
+          <button
+            type="button"
+            id="files-hidden"
+            class="icon-btn"
+            aria-pressed="false"
+            aria-label="Show hidden files"
+            title="Show hidden files"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+          <button type="button" id="files-close" class="icon-btn" aria-label="Close files" title="Close files">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </span>
+      </div>
+      <div class="files-body">
+        <ul id="files-list" class="files-list"></ul>
+        <section id="files-preview" class="files-preview" hidden>
+          <div class="files-preview-head">
+            <button type="button" id="preview-close" class="icon-btn" aria-label="Close preview" title="Close preview">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+            <b id="preview-name"></b>
+            <a id="preview-download" class="icon-btn" aria-label="Download" title="Download">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M12 4v12M6 11l6 6 6-6M4 20h16" />
+              </svg>
+            </a>
+          </div>
+          <div id="preview-body" class="files-preview-body"></div>
+        </section>
+      </div>
     </div>
 
     <dialog id="progress" class="card sheet">
@@ -325,6 +373,8 @@
         trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
         plug: '<path d="M18.4 6.6a9 9 0 1 1-12.8 0M12 2v10"/>',
         monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+        folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+        file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
       }
       const svg = (name) =>
         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`
@@ -346,7 +396,7 @@
           body: body && JSON.stringify(body),
         })
         const json = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(json.error || res.statusText)
+        if (!res.ok) throw Object.assign(new Error(json.error || res.statusText), { status: res.status })
         return json
       }
 
@@ -639,8 +689,15 @@
       // Ask for account and password unless the server has saved credentials.
       const connect = (s, mode = "code", folder = s.folder) => {
         if (connecting) return
-        const go = mode === "shell" ? (s, creds) => shell(s, creds, folder) : (s, creds) => start(s, creds, folder)
-        if ((mode === "code" && s.connected) || s.hasPassword || s.identityFile) return go(s)
+        const go = { code: start, shell, files }[mode]
+        // Files asks only when no saved key or live sign-in (kept 15 minutes) works.
+        if ((mode === "code" && s.connected) || mode === "files" || s.hasPassword || s.identityFile) {
+          return go(s, undefined, folder)
+        }
+        signIn(s, (creds) => go(s, creds, folder))
+      }
+
+      const signIn = (s, go) => {
         loginForm.reset()
         loginForm.user.value = s.user || ""
         $("login-title").textContent = `Sign in to ${s.name}`
@@ -649,7 +706,7 @@
           const creds = Object.fromEntries(new FormData(loginForm))
           loginForm.reset()
           loginDialog.close()
-          go(s, creds)
+          go(creds)
         }
         loginDialog.showModal()
         ;(s.user ? loginForm.password : loginForm.user).focus()
@@ -1160,6 +1217,139 @@
         term.focus()
       }
       $("shell-close").onclick = () => closeShell()
+
+      // File browser. Listing and previews reuse the ssh login from /files/open.
+      const PREVIEW_MAX = 512 * 1024
+      const IMAGE = /\.(png|jpe?g|gif|webp|svg)$/i
+      let closeFiles = () => {}
+      const files = async (s, creds, folder = "~") => {
+        closeFiles()
+        const fapi = `${api}/${s.id}/files`
+        const raw = (p, q = "") => `${fapi}/raw?path=${encodeURIComponent(p)}${q}`
+        const join = (name) => (cwd === "/" ? "/" : cwd + "/") + name
+        const list = $("files-list")
+        const preview = $("files-preview")
+        const note = (text, cls = "") => el("li", "files-note " + cls, text)
+        let cwd = ""
+        let entries = []
+        let hidden = storage("files-hidden") === "1"
+        let selected
+
+        const drawCrumbs = () => {
+          const parts = cwd.split("/").filter(Boolean)
+          const crumbs = [["/", "/"], ...parts.map((name, i) => [name, "/" + parts.slice(0, i + 1).join("/")])]
+          $("files-crumbs").replaceChildren(
+            ...crumbs.map(([name, p]) => {
+              const b = el("button", "", name)
+              b.type = "button"
+              b.onclick = () => open(p)
+              return b
+            }),
+          )
+          $("files-crumbs").scrollLeft = 1e6
+        }
+        const draw = () => {
+          $("files-hidden").setAttribute("aria-pressed", hidden)
+          const shown = entries
+            .filter((e) => hidden || !e.name.startsWith("."))
+            .sort((a, b) => b.dir - a.dir || a.name.localeCompare(b.name, undefined, { numeric: true }))
+          const up = cwd !== "/" && { name: "..", dir: true, up: true }
+          list.replaceChildren(
+            ...[up, ...shown].filter(Boolean).map((e) => {
+              const li = el("li")
+              const b = el("button", "file-row" + (e === selected ? " selected" : ""))
+              b.type = "button"
+              b.innerHTML = svg(e.dir ? "folder" : "file")
+              const meta = e.up ? "" : e.dir ? (e.link ? "Link" : "") : bytes(e.size)
+              const date = e.mtime ? new Date(e.mtime).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : ""
+              b.append(el("span", "file-name", e.name + (e.link ? " ↗" : "")), el("span", "file-meta", meta), el("span", "file-date", date))
+              b.onclick = () => (e.up ? open(cwd.replace(/\/[^/]*$/, "") || "/") : e.dir ? open(join(e.name)) : show(e))
+              li.append(b)
+              return li
+            }),
+          )
+          if (!shown.length) list.append(note(entries.length ? "Only hidden files" : "Empty folder"))
+        }
+        const open = async (p) => {
+          list.replaceChildren(note("Loading…"))
+          try {
+            ;({ path: cwd, entries } = await request("GET", `${fapi}?path=${encodeURIComponent(p)}`))
+            selected = undefined
+            preview.hidden = true
+            drawCrumbs()
+            draw()
+          } catch (error) {
+            if (error.status === 401) {
+              closeFiles()
+              return signIn(s, (creds) => files(s, creds, p))
+            }
+            list.replaceChildren(note(error.message, "error"))
+          }
+        }
+        const show = async (e) => {
+          selected = e
+          draw()
+          const p = join(e.name)
+          const body = $("preview-body")
+          $("preview-name").textContent = e.name
+          $("preview-download").href = raw(p, "&download=1")
+          preview.hidden = false
+          if (IMAGE.test(e.name)) {
+            const img = el("img")
+            img.alt = e.name
+            img.src = raw(p)
+            return body.replaceChildren(img)
+          }
+          body.replaceChildren(el("p", "files-note", "Loading…"))
+          try {
+            const res = await fetch(raw(p, `&max=${PREVIEW_MAX}`))
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText)
+            const data = new Uint8Array(await res.arrayBuffer())
+            if (selected !== e) return
+            if (data.includes(0)) return body.replaceChildren(el("p", "files-note", "No preview for binary files. Download it instead."))
+            const text = new TextDecoder().decode(data)
+            const more = e.size > PREVIEW_MAX ? `\n\n… showing the first ${bytes(PREVIEW_MAX)} of ${bytes(e.size)}` : ""
+            body.replaceChildren(el("pre", "files-text", text + more))
+          } catch (error) {
+            body.replaceChildren(el("p", "files-note error", error.message))
+          }
+        }
+
+        $("files-hidden").onclick = () => {
+          hidden = !hidden
+          storage("files-hidden", hidden ? "1" : "0")
+          draw()
+        }
+        $("preview-close").onclick = () => {
+          preview.hidden = true
+          selected = undefined
+          draw()
+        }
+        const onKey = (e) => {
+          if (e.key !== "Escape") return
+          preview.hidden ? closeFiles() : $("preview-close").click()
+        }
+        document.addEventListener("keydown", onKey)
+        closeFiles = () => {
+          closeFiles = () => {}
+          document.removeEventListener("keydown", onKey)
+          $("files").hidden = true
+        }
+        $("files").hidden = false
+        list.replaceChildren(note(`Connecting to ${s.name}…`))
+        $("files-crumbs").replaceChildren()
+        preview.hidden = true
+        // Reuses a live login; otherwise signs in with saved keys/password, then asks.
+        try {
+          await request("POST", `${fapi}/open`, creds || {})
+        } catch (error) {
+          closeFiles()
+          if (!creds && !s.hasPassword) return signIn(s, (creds) => files(s, creds, folder))
+          return toast(`Failed to connect to ${s.name}: ${error.message}`, true)
+        }
+        open(folder)
+      }
+      $("files-close").onclick = () => closeFiles()
 
       $("progress-cancel").onclick = async () => {
         if (!connecting) return
