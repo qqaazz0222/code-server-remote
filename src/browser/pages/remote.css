@@ -949,9 +949,24 @@ body {
   z-index: 10;
 }
 
-/* Opened from the file browser, the shell goes on top of it. */
-#shell {
+/* Opened from the file browser, the shell and the editor go on top of it. */
+#shell,
+#editor {
   z-index: 11;
+}
+
+.shell-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-frame {
+  border: 0;
+  flex: 1;
+  width: 100%;
 }
 
 .shell[hidden] {
@@ -961,6 +976,8 @@ body {
 /* iOS's translucent keyboard accessory bar shows what's behind the shell. */
 body:has(> .shell:not([hidden])) {
   background: #181818;
+  /* No page scrollbar beside the full-screen views. */
+  overflow: hidden;
 }
 
 body:has(> .shell:not([hidden])) > :not(.shell) {
@@ -974,7 +991,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   display: flex;
   font-size: 0.875rem;
   height: 40px;
-  justify-content: space-between;
+  gap: 8px;
   padding: 0 8px 0 16px;
 }
 
@@ -1052,7 +1069,8 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   position: relative;
 }
 
-.ghost {
+/* Scoped: .btn.ghost (Cancel buttons) shares the class name. */
+.term .ghost {
   color: #6e7681;
   font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace;
   font-size: 14px;
@@ -1063,7 +1081,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   z-index: 5;
 }
 
-.ghost[hidden],
+.term .ghost[hidden],
 .suggest[hidden] {
   display: none;
 }

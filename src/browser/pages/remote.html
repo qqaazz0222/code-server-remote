@@ -15,7 +15,7 @@
     <link rel="manifest" href="{{BASE}}/manifest.json" crossorigin="use-credentials" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
-    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=20" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=24" rel="stylesheet" />
     <!-- Shipped with VS Code; used by the SSH shell. -->
     <link href="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/css/xterm.css" rel="stylesheet" />
     <script defer src="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -169,15 +169,12 @@
 
     <!-- Not a <dialog>: Escape must reach the terminal. -->
     <div id="shell" class="shell" hidden>
+      <!-- Close sits top right in the shell, files and VS Code alike. -->
       <div class="shell-head">
-        <span id="shell-title"></span>
-        <span class="shell-actions">
-          <button type="button" id="shell-close" class="icon-btn" aria-label="Close shell" title="Close shell">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
-        </span>
+        <span id="shell-title" class="shell-title"></span>
+        <button type="button" id="shell-close" class="icon-btn" aria-label="Close shell" title="Close shell">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
       </div>
       <div id="term" class="term"><span id="ghost" class="ghost" hidden></span></div>
       <!-- Command suggestions from this server's history; tap to complete, or press →. -->
@@ -212,6 +209,22 @@
       </div>
       <!-- On-screen keyboard used instead of the OS one on touch screens. -->
       <div id="kbd" class="kbd" role="group" aria-label="Keyboard"></div>
+    </div>
+
+    <!-- VS Code in a frame under the shell's header, so the way back covers nothing. -->
+    <div id="editor" class="shell" hidden>
+      <div class="shell-head">
+        <span id="editor-title" class="shell-title"></span>
+        <button type="button" id="editor-close" class="icon-btn" aria-label="Close VS Code" title="Close VS Code">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <iframe
+        id="editor-frame"
+        class="editor-frame"
+        title="VS Code"
+        allow="clipboard-read; clipboard-write; fullscreen"
+      ></iframe>
     </div>
 
     <!-- Read-only file browser over ssh; shares the shell's look. -->
@@ -388,6 +401,8 @@
 
     <script>
       const base = "{{BASE}}"
+      // The editor frame landed back here (e.g. its session ended): handle it in the top page.
+      if (window.top !== window) top.location.replace(location.href)
       const api = base + "/remote-servers"
       const $ = (id) => document.getElementById(id)
       const list = $("servers")
@@ -785,8 +800,7 @@
       }
 
       const start = async (s, creds, folder) => {
-        const url = `${base}/remote/${s.id}/` + (folder ? "?folder=" + encodeURIComponent(folder) : "")
-        if (s.connected) return (location.href = url)
+        if (s.connected) return openEditor(s, folder)
         connecting = { id: s.id, cancelled: false }
         $("progress-title").textContent = `Connecting to ${s.name}`
         $("progress-log").textContent = ""
@@ -800,7 +814,10 @@
         }, 1000)
         try {
           await request("POST", `${api}/${s.id}/connect`, creds)
-          location.href = url
+          progress.close()
+          connecting = undefined
+          load()
+          openEditor(s, folder)
         } catch (error) {
           progress.close()
           if (!connecting.cancelled) toast(`Failed to connect to ${s.name}: ${error.message}`, true)
@@ -809,6 +826,25 @@
         } finally {
           clearInterval(poll)
         }
+      }
+
+      let editorPrevTitle
+      const openEditor = (s, folder) => {
+        const q = folder ? "?folder=" + encodeURIComponent(folder) : ""
+        editorPrevTitle = document.title
+        document.title = `${s.name} · VS Code`
+        $("editor-title").textContent = s.name
+        $("editor-frame").src = `${base}/remote/${s.id}/${q}`
+        $("editor").hidden = false
+        // Reloading the page reopens the editor.
+        history.replaceState(null, "", "?code=" + encodeURIComponent(s.id) + q.replace("?", "&"))
+      }
+      $("editor-close").onclick = () => {
+        $("editor").hidden = true
+        $("editor-frame").src = "about:blank"
+        document.title = editorPrevTitle
+        history.replaceState(null, "", location.pathname)
+        load()
       }
 
       // Escape sequences for the key bar; arrows/Home/End differ in application cursor mode (vim, less).
@@ -1670,7 +1706,7 @@
           draw()
         }
         const onKey = (e) => {
-          if (e.key !== "Escape" || !$("shell").hidden) return
+          if (e.key !== "Escape" || !$("shell").hidden || !$("editor").hidden) return
           preview.hidden ? closeFiles() : $("preview-close").click()
         }
         document.addEventListener("keydown", onKey)
@@ -1788,8 +1824,10 @@
       setInterval(tick, 10000)
 
       load().then(() => {
-        const id = new URLSearchParams(location.search).get("connect")
-        const s = servers.find((s) => s.id === id)
+        const params = new URLSearchParams(location.search)
+        const code = servers.find((s) => s.id === params.get("code"))
+        if (code) return connect(code, "code", params.get("folder") || undefined)
+        const s = servers.find((s) => s.id === params.get("connect"))
         if (s) connect(s)
       })
       loadStatus()

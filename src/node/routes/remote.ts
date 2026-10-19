@@ -762,53 +762,7 @@ export async function proxy(req: Request, res: Response): Promise<void> {
   if (!req.params.path && !pathname.endsWith("/")) {
     return res.redirect(`${req.params.id}/${query ? "?" + query : ""}`)
   }
-  if (!req.params.path && req.method === "GET") {
-    return proxyEditorPage(req, res, session)
-  }
   _proxy.web(req, res, { ignorePath: true, target: target(req, session) })
-}
-
-/** Back to the launcher, top right of the editor. Styles only: the page's CSP blocks inline scripts. */
-const HOME_BUTTON =
-  '<a href="../../" title="Back to servers" aria-label="Back to servers" style="position:fixed;top:0;right:0;z-index:100000;' +
-  "width:35px;height:35px;display:flex;align-items:center;justify-content:center;color:#ccc;background:#1f1f1f;" +
-  'text-decoration:none;font:18px/1 sans-serif">&#x2715;</a>'
-
-/** The editor page itself, with HOME_BUTTON added. */
-function proxyEditorPage(req: Request, res: Response, session: Session): void {
-  // Uncompressed so the button can be added; no cookies, like the shared proxy.
-  const { cookie, ...headers } = req.headers
-  http
-    .get(target(req, session), { headers: { ...headers, "accept-encoding": "identity" } }, (pres) => {
-      const out = pres.headers
-      if (out.location?.startsWith("/")) {
-        out.location = (req as any).base + out.location
-      }
-      if (pres.statusCode !== 200 || !out["content-type"]?.includes("text/html")) {
-        res.writeHead(pres.statusCode || HttpCode.ServerError, out)
-        pres.pipe(res)
-        return
-      }
-      const chunks: Buffer[] = []
-      pres.on("data", (c) => chunks.push(c))
-      pres.on("end", () => {
-        delete out["content-length"]
-        res.writeHead(200, out)
-        res.end(
-          Buffer.concat(chunks)
-            .toString()
-            .replace("</body>", HOME_BUTTON + "</body>"),
-        )
-      })
-    })
-    .on("error", (error) => {
-      if (res.headersSent) {
-        res.destroy()
-        return
-      }
-      res.writeHead(HttpCode.ServerError)
-      res.end(error.message)
-    })
 }
 
 export async function wsProxy(req: WebsocketRequest): Promise<void> {
