@@ -1,82 +1,89 @@
-# code-server
+# code-server-remote
 
-[!["GitHub Discussions"](https://img.shields.io/badge/%20GitHub-%20Discussions-gray.svg?longCache=true&logo=github&colorB=purple)](https://github.com/coder/code-server/discussions) [!["Join us on Slack"](https://img.shields.io/badge/join-us%20on%20slack-gray.svg?longCache=true&logo=slack&colorB=brightgreen)](https://coder.com/community) [![Twitter Follow](https://img.shields.io/twitter/follow/CoderHQ?label=%40CoderHQ&style=social)](https://twitter.com/coderhq) [![Discord](https://img.shields.io/discord/747933592273027093)](https://discord.com/invite/coder) [![codecov](https://codecov.io/gh/coder/code-server/branch/main/graph/badge.svg?token=5iM9farjnC)](https://codecov.io/gh/coder/code-server) [![See latest](https://img.shields.io/static/v1?label=Docs&message=see%20latest&color=blue)](https://coder.com/docs/code-server/latest)
+A fork of [code-server](https://github.com/coder/code-server) that turns it into
+a launcher for your SSH servers. Register servers once, then open VS Code, a
+shell or a file browser on any of them from the browser — desktop, tablet or
+phone.
 
-Run [VS Code](https://github.com/Microsoft/vscode) on any machine anywhere and
-access it in the browser.
+## Features
 
-![Screenshot](./assets/screenshot-1.png)
-![Screenshot](./assets/screenshot-2.png)
-
-## Highlights
-
-- Code on any device with a consistent development environment
-- Use cloud servers to speed up tests, compilations, downloads, and more
-- Preserve battery life when you're on the go; all intensive tasks run on your
-  server
+- **Server list** at `/`: servers grouped by name, online state and latency,
+  connect/disconnect per server. "This computer" (SSH to `127.0.0.1`) is always
+  present. The local editor stays at `/vscode`.
+- **VS Code on the remote**: on first use code-server is installed on the host
+  over SSH (standalone, into `~/.local`), started on a Unix socket and proxied
+  through `/remote/<id>/`. The Claude Code and ChatGPT extensions are installed
+  from Open VSX if missing. The editor opens in a frame under the launcher
+  header; reloading reopens it.
+- **Shell**: `ssh` in a local pty streamed over a WebSocket, VS Code Dark Modern
+  colors, and an on-screen keyboard (including Korean 2-set) shown by default
+  on touch devices.
+- **Files**: browse from any folder with breadcrumbs and hidden-file toggle;
+  preview text, images, PDF, audio and video; rendered/raw views for Markdown,
+  HTML (sandboxed), JSON, YAML, CSV and TSV; upload (button or drag and drop),
+  download and delete. Open the current folder in VS Code or a shell.
+  `src/samples` has files to try the previews with.
+- **Quick Entry Points**: named folders per server, offered when opening it.
+  `~` expands on the remote.
+- **Auth**: SSH keys (`identityFile`) or saved passwords (via `SSH_ASKPASS`,
+  OpenSSH 8.4+). Username and password can also be typed per connection
+  without saving. File browsing reuses one SSH ControlMaster for 15 minutes.
 
 ## Requirements
 
-See [requirements](https://coder.com/docs/code-server/latest/requirements) for minimum specs, as well as instructions
-on how to set up a Google VM on which you can install code-server.
+- Launcher host: Linux with `ssh` (OpenSSH 8.4+ for password sign-in).
+- Remote hosts: `sh`, `curl` (for the first-time code-server install) and GNU
+  findutils (the file browser uses `find -printf`).
 
-**TL;DR:** Linux machine with WebSockets enabled, 1 GB RAM, and 2 vCPUs
-
-## Getting started
-
-There are five ways to get started:
-
-1. Using the [install
-   script](https://github.com/coder/code-server/blob/main/install.sh), which
-   automates most of the process. The script uses the system package manager if
-   possible.
-2. Manually [installing
-   code-server](https://coder.com/docs/code-server/latest/install)
-3. Deploy code-server to your team with [coder/coder](https://cdr.co/coder-github)
-4. Using our one-click buttons and guides to [deploy code-server to a cloud
-   provider](https://github.com/coder/deploy-code-server) ⚡
-5. Using the [code-server feature for
-   devcontainers](https://github.com/coder/devcontainer-features/blob/main/src/code-server/README.md),
-   if you already use devcontainers in your project.
-
-If you use the install script, you can preview what occurs during the install
-process:
+## Running
 
 ```bash
-curl -fsSL https://code-server.dev/install.sh | sh -s -- --dry-run
+npm install
+npm run build:vscode
+npm run build
+node out/node/entry.js --bind-addr 0.0.0.0:8080
 ```
 
-To install, run:
+For development, `npm run watch` instead. Source builds use the dev logo,
+release builds the regular one.
+
+### Docker
+
+The production image layers this fork's server and pages on the official
+code-server release:
 
 ```bash
-curl -fsSL https://code-server.dev/install.sh | sh
+npm run build
+tar -c ci/remote/Dockerfile out src/browser/pages src/images |
+  docker build -t code-server-remote -f ci/remote/Dockerfile -
 ```
 
-When done, the install script prints out instructions for running and starting
-code-server.
+The base tag in `ci/remote/Dockerfile` must match the code-server version this
+fork is based on.
 
-> **Note**
-> To manage code-server for a team on your infrastructure, see: [coder/coder](https://cdr.co/coder-github)
+## Configuration
 
-We also have an in-depth [setup and
-configuration](https://coder.com/docs/code-server/latest/guide) guide.
+All upstream code-server [options](https://coder.com/docs/code-server/latest/guide)
+work as before. The app name defaults to `code-server-remote` (override with
+`--app-name` or `CODE_SERVER_APP_NAME`).
 
-## Questions?
+Servers are stored in `<user-data-dir>/remote-servers.json` (mode `0600`; may
+contain passwords). Remote sockets are named per launcher instance, so a test
+and a production launcher on one machine don't interfere.
 
-See answers to [frequently asked
-questions](https://coder.com/docs/code-server/latest/FAQ).
+**Put the launcher behind code-server's password auth (the default) or another
+auth layer.** Anyone who can sign in can reach every registered server.
 
-## Want to help?
+## Tests
 
-See [Contributing](https://coder.com/docs/code-server/latest/CONTRIBUTING) for
-details.
+```bash
+npm run test:unit
+```
 
-## Hiring
+Remote-specific tests are in `test/unit/node/routes/remote.test.ts`.
 
-Interested in [working at Coder](https://coder.com/careers)? Check out [our open
-positions](https://coder.com/careers#openings)!
+## Upstream
 
-## For Teams
-
-We develop [coder/coder](https://cdr.co/coder-github) to help teams to
-adopt remote development.
+Based on code-server by [Coder](https://coder.com). See the
+[upstream docs](https://coder.com/docs/code-server/latest) for install, setup
+and FAQ. Licensed under [MIT](../LICENSE).
