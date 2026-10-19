@@ -1,0 +1,6 @@
+kind: Service
+name: web
+---
+kind: Deployment
+name: web
+replicas: 3

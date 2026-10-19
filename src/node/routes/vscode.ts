@@ -180,7 +180,8 @@ router.get("/manifest.json", async (req, res) => {
       JSON.stringify(
         {
           name: req.args["app-name"],
-          short_name: req.args["app-name"],
+          // Home screen labels fit about 12 characters.
+          short_name: req.args["app-name"] === "code-server-remote" ? "CSR" : req.args["app-name"],
           start_url: ".",
           display: "fullscreen",
           display_override: ["window-controls-overlay"],

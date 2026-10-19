@@ -21,6 +21,21 @@ body {
   gap: 10px;
 }
 
+/* The short name only where the long one doesn't fit. */
+.topbar .brand .short {
+  display: none;
+}
+
+@media (max-width: 380px) {
+  .topbar .brand .long {
+    display: none;
+  }
+
+  .topbar .brand .short {
+    display: inline;
+  }
+}
+
 .topbar .brand img {
   height: 20px;
   width: 20px;
@@ -934,6 +949,11 @@ body {
   z-index: 10;
 }
 
+/* Opened from the file browser, the shell goes on top of it. */
+#shell {
+  z-index: 11;
+}
+
 .shell[hidden] {
   display: none;
 }
@@ -967,17 +987,11 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 
 .keys {
   background: #1f1f1f;
-  display: none;
+  display: flex;
   gap: 6px;
   overflow-x: auto;
   padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
   scrollbar-width: none;
-}
-
-@media (pointer: coarse) {
-  .keys {
-    display: flex;
-  }
 }
 
 .keys button {
@@ -1070,28 +1084,19 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   white-space: nowrap;
 }
 
-/* On-screen keyboard, touch screens only. */
-.kbd {
-  display: none;
-}
-
+/* On-screen keyboard; shown by default on touch screens, toggled from the key bar. */
 .kbd {
   -webkit-user-select: none;
   user-select: none;
   background: #1f1f1f;
+  display: flex;
   flex-direction: column;
   gap: 6px;
   padding: 2px 3px calc(6px + env(safe-area-inset-bottom));
 }
 
-@media (pointer: coarse) {
-  .kbd {
-    display: flex;
-  }
-
-  .shell:has(.kbd:not([hidden])) .keys {
-    padding-bottom: 6px;
-  }
+.shell:has(.kbd:not([hidden])) .keys {
+  padding-bottom: 6px;
 }
 
 .kbd[hidden] {
@@ -1182,12 +1187,37 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 
 @media (min-width: 900px) {
   .files-body:has(.files-preview:not([hidden])) {
-    grid-template-columns: minmax(280px, 2fr) minmax(0, 3fr);
+    grid-template-columns: minmax(200px, var(--split, 40%)) auto minmax(0, 1fr);
   }
 
-  .files-preview {
-    border-left: 1px solid var(--line);
+  .files-body:has(.files-preview:not([hidden])) .files-divider {
+    display: block;
   }
+}
+
+.files-divider {
+  background: var(--line);
+  cursor: col-resize;
+  display: none;
+  touch-action: none;
+  width: 4px;
+}
+
+.files-divider:hover,
+.files-divider:focus-visible,
+.files-body.resizing .files-divider {
+  background: var(--primary);
+  outline: none;
+}
+
+/* Iframes (PDF previews) would swallow the drag. */
+.files-body.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.files-body.resizing iframe {
+  pointer-events: none;
 }
 
 @media (max-width: 899px) {
@@ -1202,6 +1232,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 }
 
 .files-list {
+  container-type: inline-size;
   list-style: none;
   margin: 0;
   overflow-y: auto;
@@ -1245,6 +1276,40 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   width: 18px;
 }
 
+/* Seti-like colors per file kind. */
+.file-row[data-kind="code"] svg {
+  color: #519aba;
+}
+
+.file-row[data-kind="shell"] svg {
+  color: #8dc149;
+}
+
+.file-row[data-kind="data"] svg {
+  color: #cbcb41;
+}
+
+.file-row[data-kind="table"] svg {
+  color: #4fb36e;
+}
+
+.file-row[data-kind="image"] svg {
+  color: #a074c4;
+}
+
+.file-row[data-kind="video"] svg,
+.file-row[data-kind="audio"] svg {
+  color: #f55385;
+}
+
+.file-row[data-kind="archive"] svg {
+  color: #e37933;
+}
+
+.file-row[data-kind="pdf"] svg {
+  color: #cc3e44;
+}
+
 .file-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1258,12 +1323,24 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   white-space: nowrap;
 }
 
-@media (max-width: 600px) {
+/* The name matters most: as the list narrows (small screens, or the divider),
+   the date goes first, then the size. */
+@container (max-width: 480px) {
   .file-row {
     grid-template-columns: 18px minmax(0, 1fr) auto;
   }
 
   .file-date {
+    display: none;
+  }
+}
+
+@container (max-width: 300px) {
+  .file-row {
+    grid-template-columns: 18px minmax(0, 1fr);
+  }
+
+  .file-meta {
     display: none;
   }
 }
@@ -1345,6 +1422,148 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
 iframe.files-media {
   height: calc(100% - 32px);
   width: calc(100% - 32px);
+}
+
+/* Pages are written for a white background. */
+.files-html {
+  background: #fff;
+}
+
+.files-md {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  max-width: 860px;
+  overflow-wrap: break-word;
+  padding: 8px 24px 24px;
+}
+
+.files-md h1,
+.files-md h2 {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.3em;
+}
+
+.files-md a {
+  color: #4daafc;
+}
+
+.files-md img {
+  max-width: 100%;
+}
+
+.files-md code,
+.files-md pre {
+  background: #2b2b2b;
+  border-radius: 4px;
+  font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 0.85em;
+}
+
+.files-md code {
+  padding: 0.1em 0.3em;
+}
+
+.files-md pre {
+  overflow-x: auto;
+  padding: 12px;
+}
+
+.files-md pre code {
+  background: none;
+  padding: 0;
+}
+
+.files-md blockquote {
+  border-left: 3px solid var(--line);
+  color: var(--text-3);
+  margin: 0;
+  padding-left: 12px;
+}
+
+.files-md table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.files-md th,
+.files-md td {
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+}
+
+.files-md hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.files-csv {
+  font-size: 0.8rem;
+  padding: 12px 16px;
+}
+
+.files-csv table {
+  border-collapse: collapse;
+}
+
+.files-csv th,
+.files-csv td {
+  border: 1px solid var(--line);
+  max-width: 400px;
+  padding: 4px 10px;
+  vertical-align: top;
+  white-space: pre-wrap;
+}
+
+/* Header stays in view while scrolling down. */
+.files-csv th {
+  background: #1f1f1f;
+  position: sticky;
+  text-align: left;
+  top: 0;
+}
+
+.files-tree {
+  font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  padding: 12px 16px;
+}
+
+.files-tree details details,
+.files-tree details .tree-leaf {
+  margin-left: 16px;
+}
+
+.files-tree summary {
+  cursor: pointer;
+}
+
+.tree-leaf {
+  overflow-wrap: anywhere;
+  /* Lines up with the text after a summary's marker. */
+  padding-left: 1.1em;
+}
+
+.tree-key {
+  color: #9cdcfe;
+}
+
+.tree-meta,
+.tree-null {
+  color: var(--text-3);
+}
+
+.tree-string {
+  color: #ce9178;
+}
+
+.tree-number {
+  color: #b5cea8;
+}
+
+.tree-boolean {
+  color: #569cd6;
 }
 
 audio.files-media {

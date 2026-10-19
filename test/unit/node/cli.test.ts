@@ -40,7 +40,7 @@ const defaults = {
   "extensions-dir": path.join(paths.data, "extensions"),
   "user-data-dir": paths.data,
   "session-socket": defaultSessionSocket(paths.data),
-  "app-name": "code-server",
+  "app-name": "code-server-remote",
   _: [],
 }
 

@@ -709,7 +709,7 @@ export async function setDefaults(cliArgs: UserProvidedArgs, configArgs?: Config
   }
   args["proxy-domain"] = finalProxies
 
-  args["app-name"] ??= process.env.CODE_SERVER_APP_NAME || "code-server"
+  args["app-name"] ??= process.env.CODE_SERVER_APP_NAME || "code-server-remote"
 
   args._ = getResolvedPathsFromArgs(args)
 

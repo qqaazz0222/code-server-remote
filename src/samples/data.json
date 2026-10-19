@@ -1,0 +1,12 @@
+{
+  "name": "code-server-remote",
+  "version": 1.5,
+  "private": true,
+  "license": null,
+  "tags": ["ssh", "files", "preview"],
+  "servers": [
+    { "id": "local", "host": "127.0.0.1", "port": 22, "entries": [] },
+    { "id": "gpu", "host": "gpu.example.com", "port": 2222, "entries": [{ "name": "Work", "path": "~/work" }] }
+  ],
+  "nested": { "a": { "b": { "c": { "deep": "collapsed by default" } } } }
+}

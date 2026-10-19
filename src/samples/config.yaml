@@ -1,0 +1,15 @@
+# Comments are dropped in the parsed view.
+server:
+  host: 0.0.0.0
+  port: 8080
+  tls: false
+  started: 2026-10-19
+users:
+  - name: alice
+    roles: [admin, dev]
+  - name: bob
+    roles: []
+motd: |
+  Multi-line
+  text block
+empty: ~

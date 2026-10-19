@@ -4,7 +4,7 @@ import { describe, test, expect } from "./baseFixture"
 describe("login", ["--disable-workspace-trust", "--auth", "password"], {}, () => {
   test("should see the login page", async ({ codeServerPage }) => {
     // It should send us to the login page
-    expect(await codeServerPage.page.title()).toBe("code-server login")
+    expect(await codeServerPage.page.title()).toBe("code-server-remote login")
   })
 
   test("should be able to login", async ({ codeServerPage }) => {
