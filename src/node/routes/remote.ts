@@ -8,6 +8,7 @@ import * as net from "net"
 import * as os from "os"
 import * as path from "path"
 import { promisify } from "util"
+import Websocket from "ws"
 import { HttpCode, HttpError } from "../../common/http"
 import { rootPath, vsRootPath } from "../constants"
 import { authenticated, ensureAuthenticated, ensureOrigin, redirect, replaceTemplates } from "../http"
@@ -775,7 +776,7 @@ export async function wsProxy(req: WebsocketRequest): Promise<void> {
   _proxy.ws(req, req.ws, req.head, { ignorePath: true, target: target(req, session) })
 }
 
-// node-pty ships with VS Code; only the bits used here are typed.
+// node-pty and the headless terminal ship with VS Code; only the bits used here are typed.
 interface Pty {
   onData(cb: (data: string) => void): void
   onExit(cb: (e: { exitCode: number }) => void): void
@@ -785,40 +786,138 @@ interface Pty {
 }
 
 /**
- * Interactive ssh shell. The first message carries credentials and terminal
- * size, then each message is {d: input} or {cols, rows}; output is sent raw.
+ * An ssh shell outlives its websocket, so a dropped connection (e.g. a phone
+ * going to sleep) can reattach. A headless terminal mirrors the screen to
+ * replay it on attach.
+ */
+interface Shell {
+  id: string
+  serverId: string
+  name: string
+  folder?: string
+  started: number
+  pty: Pty
+  screen: { write(data: string, cb: () => void): void; resize(cols: number, rows: number): void; dispose(): void }
+  serialize: () => string
+  clients: Set<Websocket>
+}
+
+const shells = new Map<string, Shell>()
+
+process.on("exit", () => shells.forEach((s) => s.pty.kill()))
+
+const size = (n: unknown, fallback: number) =>
+  Number.isInteger(n) && (n as number) > 0 && (n as number) < 1000 ? (n as number) : fallback
+
+async function openShell(req: Request, server: RemoteServer, id: string, msg: any): Promise<Shell> {
+  const folder = typeof msg.folder === "string" && msg.folder.trim() ? msg.folder.trim() : server.folder
+  const { args, env } = await sshCommand(req, server, ["-t"], shellCommand(folder))
+  const mod = (name: string) => require(path.join(vsRootPath, "node_modules", name))
+  const cols = size(msg.cols, 80)
+  const rows = size(msg.rows, 24)
+  logger.info(`Opening shell on remote server ${server.name} (${server.host})`)
+  const pty: Pty = mod("node-pty").spawn("ssh", args, { name: "xterm-256color", cols, rows, env })
+  const screen = new (mod("@xterm/headless").Terminal)({ cols, rows, scrollback: 1000, allowProposedApi: true })
+  const serializer = new (mod("@xterm/addon-serialize").SerializeAddon)()
+  screen.loadAddon(serializer)
+  const shell: Shell = {
+    id,
+    serverId: server.id,
+    name: server.name,
+    folder,
+    started: Date.now(),
+    pty,
+    screen,
+    serialize: () => serializer.serialize(),
+    clients: new Set(),
+  }
+  shells.set(id, shell)
+  // Output goes through the screen first, so an attach's snapshot and the live stream neither overlap nor miss.
+  pty.onData((data) => screen.write(data, () => shell.clients.forEach((ws) => ws.send(data))))
+  pty.onExit(({ exitCode }) => {
+    shells.delete(id)
+    screen.write("", () => {
+      shell.clients.forEach((ws) => ws.close(1000, `ssh exited with code ${exitCode}`))
+      screen.dispose()
+    })
+  })
+  return shell
+}
+
+function resizeShell(shell: Shell, cols: unknown, rows: unknown): void {
+  if (size(cols, 0) && size(rows, 0)) {
+    shell.pty.resize(cols as number, rows as number)
+    shell.screen.resize(cols as number, rows as number)
+  }
+}
+
+/**
+ * Interactive ssh shell. The first message carries the shell id, terminal size
+ * and either credentials (new shell) or attach: true (reattach only). Then each
+ * message is {d: input} or {cols, rows}. Output is sent raw, starting with the
+ * current screen.
  */
 export async function wsShell(req: WebsocketRequest): Promise<void> {
   ensureOrigin(req)
   await ensureAuthenticated(req)
   const saved = await getServer(req)
   wss.handleUpgrade(req, req.ws, req.head, (ws) => {
-    let pty: Pty | undefined
+    let shell: Shell | undefined
     let started = false
     ws.on("message", async (raw) => {
       try {
         const msg = JSON.parse(raw.toString())
         if (started) {
-          // Input sent before the pty exists is dropped.
-          return typeof msg.d === "string" ? pty?.write(msg.d) : pty?.resize(msg.cols, msg.rows)
+          // Input sent before the shell is attached is dropped.
+          return typeof msg.d === "string" ? shell?.pty.write(msg.d) : shell && resizeShell(shell, msg.cols, msg.rows)
         }
         started = true
-        const server = withCredentials(saved, msg)
-        const folder = typeof msg.folder === "string" && msg.folder.trim() ? msg.folder.trim() : server.folder
-        const { args, env } = await sshCommand(req, server, ["-t"], shellCommand(folder))
-        const { spawn } = require(path.join(vsRootPath, "node_modules/node-pty"))
-        logger.info(`Opening shell on remote server ${server.name} (${server.host})`)
-        pty = spawn("ssh", args, { name: "xterm-256color", cols: msg.cols || 80, rows: msg.rows || 24, env }) as Pty
-        if (ws.readyState !== ws.OPEN) {
-          return pty.kill()
+        if (typeof msg.id !== "string" || !/^[\w-]{1,64}$/.test(msg.id)) {
+          throw new Error("Invalid shell id")
         }
-        pty.onData((data) => ws.send(data))
-        pty.onExit(({ exitCode }) => ws.close(1000, `ssh exited with code ${exitCode}`))
+        let found = shells.get(msg.id)
+        if (found && found.serverId !== saved.id) {
+          throw new Error("Invalid shell id")
+        }
+        if (!found) {
+          if (msg.attach) {
+            return ws.close(4404, "Shell ended")
+          }
+          found = await openShell(req, withCredentials(saved, msg), msg.id, msg)
+        }
+        const s = found
+        resizeShell(s, msg.cols, msg.rows)
+        // Queued behind pending output like the stream itself.
+        s.screen.write("", () => {
+          if (ws.readyState !== ws.OPEN) return
+          ws.send(s.serialize())
+          s.clients.add(ws)
+          shell = s
+        })
       } catch (error: any) {
         ws.close(1011, String(error.message).slice(0, 120))
       }
     })
-    ws.on("close", () => pty?.kill())
+    // Detach only; the shell keeps running until it exits or is ended.
+    ws.on("close", () => shell?.clients.delete(ws))
     req.ws.resume()
   })
 }
+
+router.get("/remote-shells", ensureAuthenticated, (_req, res) => {
+  res.json(
+    [...shells.values()].map((s) => ({
+      id: s.id,
+      serverId: s.serverId,
+      name: s.name,
+      folder: s.folder,
+      started: s.started,
+      clients: s.clients.size,
+    })),
+  )
+})
+
+router.delete("/remote-shells/:id", ensureAuthenticated, (req, res) => {
+  shells.get(req.params.id as string)?.pty.kill()
+  res.json({})
+})
