@@ -15,7 +15,7 @@
     <link rel="manifest" href="{{BASE}}/manifest.json" crossorigin="use-credentials" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
-    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=24" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=27" rel="stylesheet" />
     <!-- Shipped with VS Code; used by the SSH shell. -->
     <link href="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/css/xterm.css" rel="stylesheet" />
     <script defer src="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -29,11 +29,19 @@
         <span class="long">code-server-remote</span>
         <span class="short">CSR</span>
       </div>
-      <a class="icon-btn" href="{{BASE}}/logout" title="Log out" aria-label="Log out">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-        </svg>
-      </a>
+      <span class="topbar-actions">
+        <button type="button" id="split-open" class="icon-btn" title="Split view" aria-label="Split view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M12 4v16" />
+          </svg>
+        </button>
+        <a class="icon-btn" href="{{BASE}}/logout" title="Log out" aria-label="Log out">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+          </svg>
+        </a>
+      </span>
     </header>
 
     <main class="page">
@@ -180,6 +188,9 @@
       <!-- Close sits top right in the shell, files and VS Code alike. -->
       <div class="shell-head">
         <span id="shell-title" class="shell-title"></span>
+        <button type="button" class="icon-btn split-here" aria-label="Split view" title="Split view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M12 4v16" /></svg>
+        </button>
         <button type="button" id="shell-close" class="icon-btn" aria-label="Close (keeps running)" title="Close (keeps running)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
@@ -229,6 +240,9 @@
     <div id="editor" class="shell" hidden>
       <div class="shell-head">
         <span id="editor-title" class="shell-title"></span>
+        <button type="button" class="icon-btn split-here" aria-label="Split view" title="Split view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M12 4v16" /></svg>
+        </button>
         <button type="button" id="editor-close" class="icon-btn" aria-label="Close VS Code" title="Close VS Code">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
@@ -274,6 +288,9 @@
               <circle cx="12" cy="12" r="3" />
             </svg>
           </button>
+          <button type="button" class="icon-btn split-here" aria-label="Split view" title="Split view">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M12 4v16" /></svg>
+          </button>
           <button type="button" id="files-close" class="icon-btn" aria-label="Close files" title="Close files">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
@@ -317,6 +334,51 @@
           <div id="preview-body" class="files-preview-body"></div>
         </section>
       </div>
+    </div>
+
+    <!-- Panes side by side, each this page in a frame: a shell, files or VS Code on any server. -->
+    <div id="split" class="shell split" hidden>
+      <div class="shell-head">
+        <span class="shell-title">Split view</span>
+        <button
+          type="button"
+          class="icon-btn"
+          data-panes="2"
+          aria-pressed="false"
+          aria-label="Two panes"
+          title="Two panes"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M12 4v16" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="icon-btn"
+          data-panes="3"
+          aria-pressed="false"
+          aria-label="Three panes"
+          title="Three panes"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M9 4v16M15 4v16" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          id="split-close"
+          class="icon-btn"
+          aria-label="Close split view (keeps shells running)"
+          title="Close split view (keeps shells running)"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+      <div id="panes" class="panes"></div>
     </div>
 
     <dialog id="progress" class="card sheet">
@@ -415,8 +477,14 @@
 
     <script>
       const base = "{{BASE}}"
-      // The editor frame landed back here (e.g. its session ended): handle it in the top page.
-      if (window.top !== window) top.location.replace(location.href)
+      // A split view pane: only the servers and sessions, and its own shell, files or VS Code.
+      const pane = new URLSearchParams(location.search).has("pane")
+      if (pane) document.documentElement.classList.add("pane")
+      // The editor frame landed back here (e.g. its session ended): handle it in the page (or pane) around it.
+      else if (window.parent !== window) {
+        const inPane = new URLSearchParams(parent.location.search).has("pane")
+        parent.location.replace(inPane ? location.pathname + "?pane" : location.href)
+      }
       const api = base + "/remote-servers"
       const $ = (id) => document.getElementById(id)
       const list = $("servers")
@@ -912,6 +980,8 @@
         }
       }
 
+      // Query that reopens the shell, files or VS Code shown now, for moving it into a split pane.
+      let here
       let editorPrevTitle
       const openEditor = (s, folder) => {
         const q = folder ? "?folder=" + encodeURIComponent(folder) : ""
@@ -920,14 +990,19 @@
         $("editor-title").textContent = s.name
         $("editor-frame").src = `${base}/remote/${s.id}/${q}`
         $("editor").hidden = false
+        here = "code=" + encodeURIComponent(s.id) + q.replace("?", "&")
         // Reloading the page reopens the editor.
-        history.replaceState(null, "", "?code=" + encodeURIComponent(s.id) + q.replace("?", "&"))
+        history.replaceState(
+          null,
+          "",
+          (pane ? "?pane&" : "?") + "code=" + encodeURIComponent(s.id) + q.replace("?", "&"),
+        )
       }
       $("editor-close").onclick = () => {
         $("editor").hidden = true
         $("editor-frame").src = "about:blank"
         document.title = editorPrevTitle
-        history.replaceState(null, "", location.pathname)
+        history.replaceState(null, "", location.pathname + (pane ? "?pane" : ""))
         load()
       }
 
@@ -1129,6 +1204,7 @@
         url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
         const attach = !!id
         id ||= [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, "0")).join("")
+        here = `shell=${encodeURIComponent(s.id)}&attach=${id}`
         let ws
         let opened = false
         let closed = false
@@ -1668,6 +1744,7 @@
           try {
             ;({ path: cwd, entries } = await request("GET", `${fapi}?path=${encodeURIComponent(p)}`))
             document.title = `${cwd} · ${s.name}`
+            here = `files=${encodeURIComponent(s.id)}&folder=${encodeURIComponent(cwd)}`
             selected = undefined
             preview.hidden = true
             drawCrumbs()
@@ -1952,6 +2029,107 @@
         }
       }
 
+      // Drag (or arrow keys) to move the border between two panes; side by side or stacked (phones).
+      const PANE_MIN = 120
+      const paneDivider = () => {
+        const d = el("div", "pane-divider")
+        d.setAttribute("role", "separator")
+        d.setAttribute("aria-label", "Resize panes")
+        d.tabIndex = 0
+        const resize = (pos) => {
+          const panes = $("panes")
+          const [a, b] = [d.previousElementSibling, d.nextElementSibling]
+          const column = getComputedStyle(panes).flexDirection === "column"
+          const box = (f) => f.getBoundingClientRect()
+          const [start, size] = column ? ["top", "height"] : ["left", "width"]
+          // Weights in pixels, so the panes not touched keep their size.
+          const frames = [...panes.querySelectorAll(".pane-frame")]
+          // Measured before any is set: setting one changes the others.
+          frames.map((f) => box(f)[size]).forEach((px, i) => (frames[i].style.flexGrow = px))
+          const both = box(a)[size] + box(b)[size]
+          const first = Math.min(both - PANE_MIN, Math.max(PANE_MIN, pos(column) - box(a)[start]))
+          a.style.flexGrow = first
+          b.style.flexGrow = both - first
+          storage("pane-sizes-" + frames.length, JSON.stringify(frames.map((f) => +f.style.flexGrow)))
+        }
+        d.onpointerdown = (e) => {
+          e.preventDefault()
+          d.setPointerCapture(e.pointerId)
+          $("panes").classList.add("resizing")
+          d.onpointermove = (e) => resize((column) => (column ? e.clientY : e.clientX))
+        }
+        d.onpointerup = d.onpointercancel = () => {
+          d.onpointermove = null
+          $("panes").classList.remove("resizing")
+        }
+        d.onkeydown = (e) => {
+          const step = { ArrowLeft: -20, ArrowUp: -20, ArrowRight: 20, ArrowDown: 20 }[e.key]
+          if (!step) return
+          e.preventDefault()
+          const r = d.getBoundingClientRect()
+          resize((column) => (column ? r.top : r.left) + step)
+        }
+        return d
+      }
+
+      // Split view; removing a pane only detaches its shell, like closing it.
+      const setPanes = (n, first) => {
+        const panes = $("panes")
+        const frames = () => panes.querySelectorAll(".pane-frame")
+        while (frames().length < n) {
+          if (frames().length) panes.append(paneDivider())
+          const f = el("iframe", "pane-frame")
+          f.title = "Pane"
+          f.allow = "clipboard-read; clipboard-write; fullscreen"
+          f.src = location.pathname + "?pane" + (first && !frames().length ? "&" + first : "")
+          panes.append(f)
+        }
+        // The last pane and the divider before it.
+        while (frames().length > n) {
+          panes.lastChild.remove()
+          panes.lastChild.remove()
+        }
+        // Pane sizes are flex weights, remembered per layout.
+        const sizes = JSON.parse(storage("pane-sizes-" + n) || "[]")
+        frames().forEach((f, i) => (f.style.flexGrow = sizes.length === n ? sizes[i] : 1))
+        $("split")
+          .querySelectorAll("[data-panes]")
+          .forEach((b) => b.setAttribute("aria-pressed", +b.dataset.panes === n))
+        $("split").hidden = false
+        document.title = "Split view"
+        // Reloading keeps the layout; running shells are resumed from each pane's list.
+        history.replaceState(null, "", "?split=" + n)
+      }
+      $("split-open").onclick = () => setPanes(+storage("panes") || 2)
+      // From a shell, files or VS Code: it becomes the first pane (a shell reattaches there).
+      document.querySelectorAll(".split-here").forEach(
+        (b) =>
+          (b.onclick = () => {
+            const view = b.closest(".shell").id
+            const first = here
+            if (view === "shell") closeShell()
+            else if (view === "files") closeFiles()
+            else $("editor-close").click()
+            setPanes(+storage("panes") || 2, first)
+          }),
+      )
+      $("split")
+        .querySelectorAll("[data-panes]")
+        .forEach(
+          (b) =>
+            (b.onclick = () => {
+              storage("panes", b.dataset.panes)
+              setPanes(+b.dataset.panes)
+            }),
+        )
+      $("split-close").onclick = () => {
+        $("panes").replaceChildren()
+        $("split").hidden = true
+        document.title = "Servers"
+        history.replaceState(null, "", location.pathname)
+        load()
+      }
+
       $("add").onclick = () => openForm()
       document.querySelectorAll("[data-close]").forEach((b) => (b.onclick = () => b.closest("dialog").close()))
       $("search").addEventListener("input", render)
@@ -1971,8 +2149,13 @@
 
       load().then(() => {
         const params = new URLSearchParams(location.search)
+        if (params.has("split")) return setPanes(+params.get("split") === 3 ? 3 : 2)
         const code = servers.find((s) => s.id === params.get("code"))
         if (code) return connect(code, "code", params.get("folder") || undefined)
+        const sh = servers.find((s) => s.id === params.get("shell"))
+        if (sh) return shell(sh, {}, undefined, params.get("attach") || undefined)
+        const fs = servers.find((s) => s.id === params.get("files"))
+        if (fs) return files(fs, undefined, params.get("folder") || undefined)
         const s = servers.find((s) => s.id === params.get("connect"))
         if (s) connect(s)
       })
@@ -1980,8 +2163,11 @@
       setInterval(() => !document.hidden && $("shell").hidden && loadShells(), 10000)
       loadStatus()
       setInterval(() => !document.hidden && loadStatus(), STATUS_INTERVAL)
-      loadSystem()
-      setInterval(() => !document.hidden && loadSystem(), 3000)
+      // Panes hide the widgets.
+      if (!pane) {
+        loadSystem()
+        setInterval(() => !document.hidden && loadSystem(), 3000)
+      }
       // Keep connection status fresh (e.g. a session dropped in another tab).
       setInterval(() => !connecting && !document.hidden && load(), 15000)
     </script>

@@ -1705,3 +1705,90 @@ audio.files-media {
   padding: 12px 16px;
   white-space: pre;
 }
+
+.topbar-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* Split view: the panes share the width, stacked on phones. */
+.panes {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.pane-divider {
+  background: var(--line);
+  cursor: col-resize;
+  flex: none;
+  touch-action: none;
+  width: 4px;
+}
+
+.pane-divider:hover,
+.pane-divider:focus-visible,
+.panes.resizing .pane-divider {
+  background: var(--primary);
+  outline: none;
+}
+
+/* The pane frames would swallow the drag. */
+.panes.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.panes.resizing iframe {
+  pointer-events: none;
+}
+
+.pane-frame {
+  background: #181818;
+  border: 0;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.pane-frame:focus {
+  outline: 1px solid var(--primary);
+  outline-offset: -1px;
+}
+
+@media (max-width: 600px) {
+  .panes {
+    flex-direction: column;
+  }
+
+  .pane-divider {
+    cursor: row-resize;
+    height: 4px;
+    width: auto;
+  }
+
+  .panes.resizing {
+    cursor: row-resize;
+  }
+}
+
+.split [data-panes][aria-pressed="true"] {
+  color: var(--primary);
+}
+
+/* A pane shows only the servers and running sessions. */
+.pane .topbar,
+.pane .side,
+.pane .footer {
+  display: none;
+}
+
+.pane .page {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 16px;
+}
+
+/* Panes don't split again. */
+.pane .split-here {
+  display: none;
+}
