@@ -1215,6 +1215,8 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   flex-direction: column;
   gap: 6px;
   padding: 2px 3px calc(6px + env(safe-area-inset-bottom));
+  /* No pan or zoom gestures to wait for between fast taps. */
+  touch-action: none;
 }
 
 .shell:has(.kbd:not([hidden])) .keys {
@@ -1777,18 +1779,164 @@ audio.files-media {
 }
 
 /* A pane shows only the servers and running sessions. */
+/* A pane shows only its own start screen (or what it opened). */
 .pane .topbar,
-.pane .side,
+.pane .page,
 .pane .footer {
   display: none;
 }
 
-.pane .page {
-  grid-template-columns: minmax(0, 1fr);
-  padding: 16px;
+/* Solid, not the wallpaper: panes sit next to shells and VS Code. */
+.pane body {
+  background: #181818;
 }
 
-/* Panes don't split again. */
-.pane .split-here {
+.picker {
+  box-sizing: border-box;
+  display: grid;
+  gap: 12px;
+  margin: 0 auto;
+  max-width: 560px;
+  padding: 16px;
+  width: 100%;
+}
+
+.picker[hidden] {
   display: none;
+}
+
+.picker h1 {
+  font-size: 1.1rem;
+  margin: 4px 0 0;
+}
+
+.picker .widget,
+.picker .shell-item,
+.picker-row {
+  background: #1f1f1f;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.picker .shell-item:hover,
+.picker .shell-item:focus-within {
+  background: #2a2a2a;
+}
+
+/* Running sessions in one column: panes are narrow. */
+.picker .shell-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.picker-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* A server card: name, then a big button per mode. */
+.picker-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.picker-head {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.picker-head > span:not(.avatar) {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.picker-head b,
+.picker-head small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-head small {
+  color: var(--text-2);
+}
+
+.picker-row .avatar {
+  border-radius: 10px;
+  flex: none;
+  font-size: 1rem;
+  height: 36px;
+  margin: 0;
+  width: 36px;
+}
+
+.picker-row .avatar svg {
+  height: 20px;
+  width: 20px;
+}
+
+.picker-row .avatar .status {
+  border-color: #1f1f1f;
+  border-width: 2px;
+  height: 10px;
+  width: 10px;
+}
+
+.picker-modes {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.picker-mode {
+  align-items: center;
+  background: #2a2a2a;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.875rem;
+  gap: 8px;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.picker-mode:hover {
+  background: #333;
+}
+
+.picker-mode:focus-visible {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.picker-mode svg {
+  flex: none;
+  height: 18px;
+  width: 18px;
+}
+
+.picker-mode span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 360px) {
+  .picker-mode span {
+    display: none;
+  }
 }

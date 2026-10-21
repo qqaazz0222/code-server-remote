@@ -15,7 +15,7 @@
     <link rel="manifest" href="{{BASE}}/manifest.json" crossorigin="use-credentials" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
-    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=27" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=31" rel="stylesheet" />
     <!-- Shipped with VS Code; used by the SSH shell. -->
     <link href="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/css/xterm.css" rel="stylesheet" />
     <script defer src="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -140,6 +140,12 @@
     </main>
 
     <footer id="footer" class="footer"></footer>
+
+    <!-- A split view pane's own start screen: what to open in this pane, on which server. -->
+    <section id="picker" class="picker" hidden>
+      <h1>Open in this pane</h1>
+      <ul id="picker-list" class="picker-list"></ul>
+    </section>
 
     <div id="toast" class="toast" role="status" hidden></div>
 
@@ -379,6 +385,18 @@
         </button>
       </div>
       <div id="panes" class="panes"></div>
+      <!-- Inside the split view: the page's other children are hidden while it shows. -->
+      <dialog id="unsplit-dialog" class="card sheet">
+        <div class="sheet-head">
+          <h2>Keep which pane?</h2>
+          <button type="button" class="icon-btn" data-close aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <div id="unsplit-list" class="sheet-body modes"></div>
+      </dialog>
     </div>
 
     <dialog id="progress" class="card sheet">
@@ -487,6 +505,12 @@
       }
       const api = base + "/remote-servers"
       const $ = (id) => document.getElementById(id)
+      // Running sessions and search move to the pane's own screen.
+      if (pane) {
+        $("picker").hidden = false
+        $("picker").insertBefore(document.querySelector(".search"), $("picker-list"))
+        $("picker").insertBefore($("shells"), $("picker-list"))
+      }
       const list = $("servers")
       const dialog = $("dialog")
       const form = $("form")
@@ -610,12 +634,61 @@
         load()
       }
 
+      const avatarOf = (s) => {
+        const avatar = el("span", "avatar")
+        if (s.id === "local") {
+          avatar.classList.add("local")
+          avatar.innerHTML = svg("monitor")
+        } else {
+          avatar.textContent = (s.name[0] || "?").toUpperCase()
+          avatar.style.setProperty("--hue", hue(s.name))
+        }
+        const st = statuses[s.id]
+        if (st) {
+          const badge = el("span", "status " + (st.online ? "online" : st.online === false ? "offline" : "unknown"))
+          badge.title = st.online
+            ? `Online · ${st.ms} ms`
+            : st.online === false
+              ? "Offline"
+              : "Can't check (jump host)"
+          badge.setAttribute("aria-label", badge.title)
+          avatar.append(badge)
+        }
+        return avatar
+      }
+
+      // One row per server with a button per mode, opening in the server's folder.
+      const renderPicker = (shown) =>
+        $("picker-list").replaceChildren(
+          ...shown.map((s) => {
+            const li = el("li", "picker-row")
+            const head = el("div", "picker-head")
+            const text = el("span")
+            text.append(el("b", "", s.name), el("small", "", `${s.user ? s.user + "@" : ""}${s.host}`))
+            head.append(avatarOf(s), text)
+            const modes = el("div", "picker-modes")
+            for (const b of $("mode-dialog").querySelectorAll("[data-mode]")) {
+              const name = b.querySelector("b").textContent
+              const open = el("button", "picker-mode")
+              open.type = "button"
+              open.title = `${name} on ${s.name}`
+              open.innerHTML = b.querySelector("svg").outerHTML
+              open.append(el("span", "", name))
+              open.onclick = () => connect(s, b.dataset.mode)
+              modes.append(open)
+            }
+            li.append(head, modes)
+            return li
+          }),
+        )
+
       const render = () => {
         const q = $("search").value.trim().toLowerCase()
         const shown = servers.filter(
           (s) => !q || `${s.name} ${s.host} ${s.user || ""} ${s.group || ""}`.toLowerCase().includes(q),
         )
         $("empty").hidden = shown.length > 0
+        if (pane) return renderPicker(shown)
         const byGroup = new Map()
         for (const s of shown) {
           const li = el("li", "tile widget" + (s.connected ? " connected" : ""))
@@ -623,26 +696,7 @@
           open.type = "button"
           open.title = s.connected ? `Open ${s.name}` : `Connect to ${s.name}`
           open.onclick = () => choose(s)
-          const avatar = el("span", "avatar")
-          if (s.id === "local") {
-            avatar.classList.add("local")
-            avatar.innerHTML = svg("monitor")
-          } else {
-            avatar.textContent = (s.name[0] || "?").toUpperCase()
-            avatar.style.setProperty("--hue", hue(s.name))
-          }
-          const st = statuses[s.id]
-          if (st) {
-            const badge = el("span", "status " + (st.online ? "online" : st.online === false ? "offline" : "unknown"))
-            badge.title = st.online
-              ? `Online · ${st.ms} ms`
-              : st.online === false
-                ? "Offline"
-                : "Can't check (jump host)"
-            badge.setAttribute("aria-label", badge.title)
-            avatar.append(badge)
-          }
-
+          const avatar = avatarOf(s)
           const name = el("span", "name", s.name)
           if (s.connected) name.prepend(el("span", "dot"))
           open.append(
@@ -982,6 +1036,8 @@
 
       // Query that reopens the shell, files or VS Code shown now, for moving it into a split pane.
       let here
+      // For the split view closing: what this pane shows, if anything.
+      window.paneView = () => ([...document.querySelectorAll("body > .shell")].some((e) => !e.hidden) ? here : "")
       let editorPrevTitle
       const openEditor = (s, folder) => {
         const q = folder ? "?folder=" + encodeURIComponent(folder) : ""
@@ -1210,10 +1266,12 @@
         let closed = false
         let dropped = false
         let retry
+        // Keys typed while (re)connecting wait for the shell instead of being dropped.
+        const pending = []
         const send = (msg) => {
-          if (!opened || ws.readyState !== WebSocket.OPEN) return
           if (typeof msg.d === "string") track(msg.d)
-          ws.send(JSON.stringify(msg))
+          if (opened && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
+          else if (msg.d !== undefined) pending.push(msg)
         }
         // Autosuggest: follow what's typed on the prompt line and offer past commands
         // that start with it. Arrows, Tab, Ctrl+… move the cursor in ways we can't
@@ -1259,8 +1317,13 @@
             }
           if (lost) showHints()
         }
-        // Called after output is drawn, so the typed text has been echoed.
-        const showHints = () => {
+        // Called after output is drawn, so the typed text has been echoed. At most once a
+        // frame: it measures the screen, which slows fast typing when run per key.
+        let hintFrame = 0
+        const showHints = () => (hintFrame ||= requestAnimationFrame(drawHints))
+        const drawHints = () => {
+          hintFrame = 0
+          if (closed) return
           const b = term.buffer.active
           const matches =
             lost || line.trim().length < 2 || b.type === "alternate" || !screenLine().endsWith(line)
@@ -1457,9 +1520,20 @@
         }
         const saved = storage("kbd")
         setKbd(saved ? saved === "1" : touch)
+        // Taps in the gaps between keys go to the nearest key, not nowhere.
+        const nearestKey = (x, y) => {
+          let best
+          let min = Infinity
+          for (const k of kbd.querySelectorAll("button")) {
+            const r = k.getBoundingClientRect()
+            const d = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom))
+            if (d < min) [best, min] = [k, d]
+          }
+          return best
+        }
         // Keys act on press, not click, so fast typing doesn't drop taps.
         kbd.onpointerdown = (e) => {
-          const b = e.target.closest("button")
+          const b = e.target.closest("button") || nearestKey(e.clientX, e.clientY)
           if (!b) return
           e.preventDefault()
           b.classList.add("down")
@@ -1501,6 +1575,7 @@
             const login = attach ? { attach } : { ...creds, folder }
             ws.send(JSON.stringify({ ...login, id, cols: term.cols, rows: term.rows }))
             opened = true
+            for (const msg of pending.splice(0)) ws.send(JSON.stringify(msg))
           }
           ws.onmessage = (e) => {
             // Each connection starts with the whole screen as the server has it.
@@ -2102,17 +2177,23 @@
       }
       $("split-open").onclick = () => setPanes(+storage("panes") || 2)
       // From a shell, files or VS Code: it becomes the first pane (a shell reattaches there).
-      document.querySelectorAll(".split-here").forEach(
-        (b) =>
-          (b.onclick = () => {
+      // In a pane, the same button ends the split and keeps this pane's view full screen.
+      document.querySelectorAll(".split-here").forEach((b) => {
+        if (pane) {
+          b.title = "Close split view, keep this"
+          b.setAttribute("aria-label", b.title)
+          b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2" /></svg>'
+          return (b.onclick = () => parent.location.replace(location.pathname + "?" + here))
+        }
+        b.onclick = () => {
             const view = b.closest(".shell").id
             const first = here
             if (view === "shell") closeShell()
             else if (view === "files") closeFiles()
             else $("editor-close").click()
-            setPanes(+storage("panes") || 2, first)
-          }),
-      )
+          setPanes(+storage("panes") || 2, first)
+        }
+      })
       $("split")
         .querySelectorAll("[data-panes]")
         .forEach(
@@ -2122,12 +2203,40 @@
               setPanes(+b.dataset.panes)
             }),
         )
-      $("split-close").onclick = () => {
+      const closeSplit = () => {
         $("panes").replaceChildren()
         $("split").hidden = true
         document.title = "Servers"
         history.replaceState(null, "", location.pathname)
         load()
+      }
+      // Asks which pane's shell, files or VS Code to keep full screen, unless none has one.
+      $("split-close").onclick = () => {
+        const option = (mode, title, sub, go) => {
+          const b = el("button", "mode")
+          b.type = "button"
+          b.innerHTML = mode ? $("mode-dialog").querySelector(`[data-mode="${mode}"] svg`).outerHTML : svg("monitor")
+          const text = el("span")
+          text.append(el("b", "", title), el("small", "", sub))
+          b.append(text)
+          b.onclick = go
+          return b
+        }
+        const kept = [...$("panes").querySelectorAll(".pane-frame")].flatMap((f, i) => {
+          const view = f.contentWindow.paneView?.()
+          if (!view) return []
+          const go = () => location.replace(location.pathname + "?" + view)
+          return [option(view.split("=")[0], `Pane ${i + 1}`, f.contentDocument.title, go)]
+        })
+        if (!kept.length) return closeSplit()
+        $("unsplit-list").replaceChildren(
+          ...kept,
+          option("", "Servers", "Close all panes", () => {
+            $("unsplit-dialog").close()
+            closeSplit()
+          }),
+        )
+        $("unsplit-dialog").showModal()
       }
 
       $("add").onclick = () => openForm()
