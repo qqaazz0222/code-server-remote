@@ -198,6 +198,12 @@
             <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 15h6" />
           </svg>
         </button>
+        <button type="button" tabindex="-1" id="paste" aria-label="Paste" title="Paste">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+            <path d="M9 4H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3" />
+            <rect x="9" y="2" width="6" height="4" rx="1" />
+          </svg>
+        </button>
         <button type="button" tabindex="-1" data-key="esc">Esc</button>
         <button type="button" tabindex="-1" data-key="tab">Tab</button>
         <button type="button" tabindex="-1" data-mod="ctrl" aria-pressed="false">Ctrl</button>
@@ -1248,6 +1254,14 @@
           setMod("alt", false)
           send({ d })
         }
+        // The clipboard API needs HTTPS (and may be refused); else the OS paste goes into a prompt.
+        const paste = async () => {
+          const text = await navigator.clipboard?.readText().catch(() => undefined)
+          const pasted = text ?? prompt("Paste here")
+          // xterm wraps it for bracketed paste mode and sends it through input().
+          if (pasted) term.paste(pasted)
+          term.focus()
+        }
         // Don't take focus from the terminal, or the soft keyboard closes.
         const combos = $("combos")
         keys.onmousedown = combos.onmousedown = suggest.onmousedown = (e) => e.preventDefault()
@@ -1285,6 +1299,7 @@
           const b = e.target.closest("button")
           if (!b || longPressed) return
           if (b.id === "kbd-toggle") return setKbd(kbd.hidden)
+          if (b.id === "paste") return paste()
           combos.hidden = true
           if (b.dataset.mod) setMod(b.dataset.mod, !mods[b.dataset.mod])
           else input(keySeq(b.dataset.key, term.modes.applicationCursorKeysMode))
