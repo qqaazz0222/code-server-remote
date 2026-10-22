@@ -1,5 +1,6 @@
 import * as cookie from "cookie"
 import type { Request } from "express"
+import type { ClientRequest, IncomingMessage } from "http"
 import proxyServer from "http-proxy"
 import { getCookieSessionName, HttpCode } from "../common/http"
 
@@ -26,7 +27,7 @@ function identity<T>(val: T): T {
 
 // Strip the code-server cookie if it exists to avoid transmitting the cookie
 // to potentially malicious local ports.
-proxy.on("proxyReq", (preq, req) => {
+const stripSessionCookie = (preq: ClientRequest, req: IncomingMessage) => {
   if (req.headers.cookie) {
     const cookieSessionName = getCookieSessionName((req as Request).args["cookie-suffix"])
     // Encoding and decoding are no-ops; we just want to remove the token
@@ -45,7 +46,10 @@ proxy.on("proxyReq", (preq, req) => {
       ),
     )
   }
-})
+}
+proxy.on("proxyReq", stripSessionCookie)
+// Websocket upgrades carry the cookie too.
+proxy.on("proxyReqWs", stripSessionCookie)
 
 // Intercept the response to rewrite absolute redirects against the base path.
 // Is disabled when the request has no base path which means /absproxy is in use.

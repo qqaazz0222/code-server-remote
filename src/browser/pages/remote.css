@@ -21,6 +21,13 @@ body {
   gap: 10px;
 }
 
+.topbar .brand .version {
+  color: var(--text-3);
+  font-size: 0.75rem;
+  font-weight: 400;
+  margin-left: -4px;
+}
+
 /* The short name only where the long one doesn't fit. */
 .topbar .brand .short {
   display: none;
@@ -90,6 +97,12 @@ body {
   font-size: 1.05rem;
   font-weight: 600;
   margin: 0;
+}
+
+.w-actions {
+  align-items: center;
+  display: flex;
+  gap: 4px;
 }
 
 .w-meta {
@@ -697,13 +710,30 @@ body {
 }
 
 /* The login dialog has no groups; give its fields a card too. */
-#login-form .form {
+#login-form .form,
+#send-form .form {
   background: var(--l-bg);
   border: 1px solid var(--l-line);
   border-radius: 12px;
   gap: 12px;
   margin: 12px 20px;
   padding: 16px;
+}
+
+/* ask(): a confirm() in the page's own style. */
+.ask-text {
+  color: var(--l-text-2);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.btn.danger {
+  background: var(--danger);
+}
+
+.btn.danger:hover {
+  filter: brightness(0.92);
 }
 
 .actions {
@@ -765,6 +795,12 @@ body {
   transform: translateX(-50%);
   white-space: pre-wrap;
   width: max-content;
+  /* Over the full-screen views. */
+  z-index: 20;
+}
+
+.toast.progress {
+  background-image: linear-gradient(90deg, rgba(0, 120, 212, 0.4) var(--progress), transparent 0);
 }
 
 .toast[hidden] {
@@ -1026,6 +1062,24 @@ body {
   color: var(--danger);
 }
 
+/* The mode dialog's entry point: opens the entry point dialog. */
+.entry-pick {
+  font: inherit;
+  padding: 6px 12px;
+  text-align: left;
+  width: 100%;
+}
+
+.entry-pick em {
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-style: normal;
+}
+
+.entry-body {
+  padding-bottom: 20px;
+}
+
 .entry-form {
   display: grid;
   gap: 6px;
@@ -1084,7 +1138,8 @@ body:has(> .shell:not([hidden])) {
   overflow: hidden;
 }
 
-body:has(> .shell:not([hidden])) > :not(.shell) {
+/* Dialogs and toasts opened from a view stay visible; a hidden modal dialog would freeze the page. */
+body:has(> .shell:not([hidden])) > :not(.shell, dialog, .toast) {
   visibility: hidden;
 }
 
@@ -1340,6 +1395,20 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   outline: none;
 }
 
+/* A grab area wider than the 4px line, for fingers; it sits over the neighbours. */
+.files-divider,
+.pane-divider {
+  position: relative;
+  z-index: 1;
+}
+
+.files-divider::before,
+.pane-divider::before {
+  content: "";
+  inset: 0 -10px;
+  position: absolute;
+}
+
 /* Iframes (PDF previews) would swallow the drag. */
 .files-body.resizing {
   cursor: col-resize;
@@ -1518,7 +1587,7 @@ body:has(> .shell:not([hidden])) > :not(.shell) {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Delete shows on hover, or always where there's no hover. */
+/* Send and delete show on hover, or always where there's no hover. */
 .file-delete {
   flex: none;
   margin-right: 8px;
@@ -1769,13 +1838,13 @@ audio.files-media {
     width: auto;
   }
 
+  .pane-divider::before {
+    inset: -10px 0;
+  }
+
   .panes.resizing {
     cursor: row-resize;
   }
-}
-
-.split [data-panes][aria-pressed="true"] {
-  color: var(--primary);
 }
 
 /* A pane shows only the servers and running sessions. */
@@ -1803,6 +1872,33 @@ audio.files-media {
 
 .picker[hidden] {
   display: none;
+}
+
+/* The split view's shared keyboard; each pane's own stays hidden. */
+.pane #combos,
+.pane #keys,
+.pane #kbd,
+.split.no-shell > .combos,
+.split.no-shell > .keys,
+.split.no-shell > .kbd {
+  display: none;
+}
+
+/* The pane the shared keyboard types into, when more than one has a shell. */
+.pane-frame.typing {
+  outline: 1px solid var(--primary);
+  outline-offset: -1px;
+}
+
+#split-add:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.picker-top {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
 }
 
 .picker h1 {
@@ -1889,6 +1985,41 @@ audio.files-media {
   border-width: 2px;
   height: 10px;
   width: 10px;
+}
+
+/* The picked entry point, at the right of the server's name. */
+.picker-entry {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text-2);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.75rem;
+  gap: 6px;
+  margin-left: auto;
+  max-width: 50%;
+  min-height: 32px;
+  padding: 0 8px;
+}
+
+.picker-entry:hover {
+  background: #2a2a2a;
+  color: var(--text);
+}
+
+.picker-entry svg {
+  flex: none;
+  height: 16px;
+  width: 16px;
+}
+
+.picker-entry span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .picker-modes {

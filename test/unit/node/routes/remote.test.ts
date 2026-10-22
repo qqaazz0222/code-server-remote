@@ -5,6 +5,7 @@ import * as os from "os"
 import * as path from "path"
 import {
   listCommand,
+  packCommand,
   parseEntries,
   parseListing,
   parseServer,
@@ -12,6 +13,8 @@ import {
   readCommand,
   removeCommand,
   shellCommand,
+  sizeCommand,
+  unpackCommand,
   writeCommand,
 } from "../../../../src/node/routes/remote"
 import * as httpserver from "../../../utils/httpserver"
@@ -124,6 +127,39 @@ describe("remote servers", () => {
     // Checked with rm swapped for echo, so a broken guard can't wipe anything.
     expect(status(removeCommand("/").replace("rm -rf", "echo rm -rf"))).toBe(5)
     expect(fs.existsSync(home)).toBe(true)
+  })
+
+  it("should copy files and folders through a tar stream", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "files-"))
+    const sh = (cmd: string, input?: Buffer) =>
+      execFileSync("sh", ["-c", cmd], { input, env: { ...process.env, HOME: home } })
+    const status = (cmd: string, input?: Buffer) => {
+      try {
+        sh(cmd, input)
+        return 0
+      } catch (error: any) {
+        return error.status
+      }
+    }
+    fs.mkdirSync(path.join(home, "src/it's/sub"), { recursive: true })
+    fs.writeFileSync(path.join(home, "src/it's/sub/a.txt"), "one")
+    fs.mkdirSync(path.join(home, "dest"))
+
+    sh(unpackCommand("~/dest", "it's"), sh(packCommand("~/src/it's")))
+    expect(fs.readFileSync(path.join(home, "dest/it's/sub/a.txt"), "utf8")).toBe("one")
+    // Existing names need overwrite; missing sources and folders exit 3.
+    const file = sh(packCommand("~/src/it's/sub/a.txt"))
+    sh(unpackCommand("~/dest", "a.txt"), file)
+    expect(status(unpackCommand("~/dest", "a.txt"), file)).toBe(4)
+    fs.writeFileSync(path.join(home, "src/it's/sub/a.txt"), "two")
+    sh(unpackCommand("~/dest", "a.txt", true), sh(packCommand("~/src/it's/sub/a.txt")))
+    expect(fs.readFileSync(path.join(home, "dest/a.txt"), "utf8")).toBe("two")
+    expect(status(packCommand("~/gone"))).toBe(3)
+    expect(status(unpackCommand("~/gone", "a.txt"), file)).toBe(3)
+    // Sizes: exact for files, from du (1K blocks) for folders.
+    expect(sh(sizeCommand("~/dest/a.txt")).toString().trim()).toBe("3")
+    expect(Number(sh(sizeCommand("~/dest/it's")))).toBeGreaterThan(0)
+    expect(status(sizeCommand("~/gone"))).toBe(3)
   })
 
   it("should probe TCP ports", async () => {

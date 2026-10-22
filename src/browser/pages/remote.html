@@ -27,6 +27,7 @@
       <div class="brand">
         <img src="{{CS_STATIC_BASE}}/src/images/{{LOGO}}.svg" alt="" />
         <span class="long">code-server-remote</span>
+        <span class="version">{{VERSION}}</span>
         <span class="short">CSR</span>
       </div>
       <span class="topbar-actions">
@@ -115,7 +116,14 @@
         <section id="shells" class="widget shells" hidden>
           <div class="w-head">
             <h2>Running Sessions</h2>
-            <span id="shells-count" class="w-meta"></span>
+            <span class="w-actions">
+              <span id="shells-count" class="w-meta"></span>
+              <button type="button" id="shells-end" class="icon-btn danger" aria-label="End all sessions" title="End all sessions">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <path d="M18.4 6.6a9 9 0 1 1-12.8 0M12 2v10" />
+                </svg>
+              </button>
+            </span>
           </div>
           <ul id="shell-list" class="shell-list"></ul>
         </section>
@@ -143,7 +151,14 @@
 
     <!-- A split view pane's own start screen: what to open in this pane, on which server. -->
     <section id="picker" class="picker" hidden>
-      <h1>Open in this pane</h1>
+      <div class="picker-top">
+        <h1>Open in this pane</h1>
+        <button type="button" id="picker-close" class="icon-btn" aria-label="Close this pane" title="Close this pane">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
       <ul id="picker-list" class="picker-list"></ul>
     </section>
 
@@ -177,10 +192,28 @@
           <span><b>Files</b><small>Browse and preview files on the host</small></span>
         </button>
       </div>
-      <!-- Folder the chosen mode starts in. -->
+      <!-- Folder the chosen mode starts in; changed in the entry point dialog. -->
       <div class="sheet-body entries">
         <h3>Quick Entry Point</h3>
-        <div id="entry-list" class="entry-list" role="radiogroup" aria-label="Quick Entry Point"></div>
+        <button type="button" id="mode-entry" class="entry entry-pick">
+          <span><b></b><small></small></span>
+          <em>Change</em>
+        </button>
+      </div>
+    </dialog>
+
+    <!-- Entry points only: pick, add or remove; opened from the mode dialog, panes and files. -->
+    <dialog id="entry-dialog" class="card sheet">
+      <div class="sheet-head">
+        <h2 id="entry-title">Entry points</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+      <div class="sheet-body entry-body">
+        <div id="entry-list" class="entry-list" role="radiogroup" aria-label="Entry points"></div>
         <form id="entry-form" class="entry-form">
           <input class="field" name="name" placeholder="Alias" maxlength="40" required aria-label="Alias" />
           <input class="field" name="path" placeholder="~/project" maxlength="1024" required aria-label="Path" />
@@ -194,6 +227,8 @@
       <!-- Close sits top right in the shell, files and VS Code alike. -->
       <div class="shell-head">
         <span id="shell-title" class="shell-title"></span>
+        <button type="button" id="font-down" class="icon-btn" aria-label="Smaller text" title="Smaller text">A−</button>
+        <button type="button" id="font-up" class="icon-btn" aria-label="Larger text" title="Larger text">A+</button>
         <button type="button" class="icon-btn split-here" aria-label="Split view" title="Split view">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M12 4v16" /></svg>
         </button>
@@ -276,6 +311,11 @@
               <path d="M4 17l6-6-6-6M12 19h8" />
             </svg>
           </button>
+          <button type="button" id="files-entry" class="icon-btn" aria-label="Entry points" title="Add this folder as an entry point">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+              <path d="M6 3h12v18l-6-4-6 4z" />
+            </svg>
+          </button>
           <button type="button" id="files-upload" class="icon-btn" aria-label="Upload files" title="Upload files">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M12 16V4M6 9l6-6 6 6M4 20h16" />
@@ -346,38 +386,17 @@
     <div id="split" class="shell split" hidden>
       <div class="shell-head">
         <span class="shell-title">Split view</span>
-        <button
-          type="button"
-          class="icon-btn"
-          data-panes="2"
-          aria-pressed="false"
-          aria-label="Two panes"
-          title="Two panes"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <path d="M12 4v16" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          class="icon-btn"
-          data-panes="3"
-          aria-pressed="false"
-          aria-label="Three panes"
-          title="Three panes"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <path d="M9 4v16M15 4v16" />
+        <button type="button" id="split-add" class="icon-btn" aria-label="Add a pane" title="Add a pane">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M12 5v14M5 12h14" />
           </svg>
         </button>
         <button
           type="button"
           id="split-close"
           class="icon-btn"
-          aria-label="Close split view (keeps shells running)"
-          title="Close split view (keeps shells running)"
+          aria-label="Close all panes (keeps shells running)"
+          title="Close all panes (keeps shells running)"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M6 6l12 12M18 6L6 18" />
@@ -385,18 +404,6 @@
         </button>
       </div>
       <div id="panes" class="panes"></div>
-      <!-- Inside the split view: the page's other children are hidden while it shows. -->
-      <dialog id="unsplit-dialog" class="card sheet">
-        <div class="sheet-head">
-          <h2>Keep which pane?</h2>
-          <button type="button" class="icon-btn" data-close aria-label="Close">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
-        </div>
-        <div id="unsplit-list" class="sheet-body modes"></div>
-      </dialog>
     </div>
 
     <dialog id="progress" class="card sheet">
@@ -434,6 +441,43 @@
         <div class="actions">
           <button type="button" class="btn ghost" data-close>Cancel</button>
           <button type="submit" class="btn">Connect</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- In place of the browser's confirm(); see ask(). -->
+    <dialog id="ask-dialog" class="card sheet">
+      <form method="dialog">
+        <div class="sheet-head">
+          <h2 id="ask-title"></h2>
+        </div>
+        <p id="ask-text" class="sheet-body ask-text"></p>
+        <div class="actions">
+          <button type="submit" class="btn ghost" value="">Cancel</button>
+          <button type="submit" id="ask-ok" class="btn danger" value="ok"></button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Copies a file or folder from the file browser into a folder on any server. -->
+    <dialog id="send-dialog" class="card sheet">
+      <form id="send-form" method="dialog">
+        <div class="sheet-head">
+          <h2 id="send-title">Send</h2>
+          <button type="button" class="icon-btn" data-close aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+        <div class="sheet-body form">
+          <label>Server <select class="field" name="to"></select></label>
+          <label>Folder <input class="field" name="dest" list="send-entries" maxlength="4096" required /></label>
+          <datalist id="send-entries"></datalist>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn ghost" data-close>Cancel</button>
+          <button type="submit" class="btn">Send</button>
         </div>
       </form>
     </dialog>
@@ -525,6 +569,7 @@
       const ICONS = {
         edit: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
         trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
+        send: '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>',
         plug: '<path d="M18.4 6.6a9 9 0 1 1-12.8 0M12 2v10"/>',
         stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
         monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
@@ -574,14 +619,30 @@
         `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`
 
       let toastTimer
-      const toast = (text, error) => {
+      // progress (0–100) fills the toast as a bar, for transfers.
+      const toast = (text, error, progress) => {
         const t = $("toast")
         t.textContent = text
         t.classList.toggle("error", !!error)
+        t.classList.toggle("progress", progress !== undefined)
+        t.style.setProperty("--progress", (progress || 0) + "%")
         t.hidden = false
         clearTimeout(toastTimer)
         toastTimer = setTimeout(() => (t.hidden = true), error ? 8000 : 3000)
       }
+
+      // Resolves true when confirmed; Escape or Cancel is false.
+      const ask = (title, text, ok) =>
+        new Promise((resolve) => {
+          const d = $("ask-dialog")
+          $("ask-title").textContent = title
+          $("ask-text").textContent = text
+          $("ask-ok").textContent = ok
+          d.returnValue = ""
+          d.onclose = () => resolve(d.returnValue === "ok")
+          d.showModal()
+          $("ask-ok").focus()
+        })
 
       const request = async (method, url, body) => {
         const res = await fetch(url, {
@@ -657,7 +718,18 @@
         return avatar
       }
 
-      // One row per server with a button per mode, opening in the server's folder.
+      // Default starts in the server's folder, else home. The last pick is remembered.
+      const entriesOf = (s) => [{ name: "Default", path: s.folder || "~/" }, ...(s.entries || [])]
+      const pickedEntry = (s) => {
+        const picked = storage("entry-" + s.id)
+        return entriesOf(s).some((e) => e.path === picked) ? picked : entriesOf(s)[0].path
+      }
+
+      const putEntries = async (s, list) =>
+        (s.entries = (await request("PUT", `${api}/${s.id}/entries`, { entries: list })).entries)
+
+      // One row per server with a button per mode, opening in its picked entry point;
+      // the entry button opens the dialog to pick or add one.
       const renderPicker = (shown) =>
         $("picker-list").replaceChildren(
           ...shown.map((s) => {
@@ -665,7 +737,13 @@
             const head = el("div", "picker-head")
             const text = el("span")
             text.append(el("b", "", s.name), el("small", "", `${s.user ? s.user + "@" : ""}${s.host}`))
-            head.append(avatarOf(s), text)
+            const entry = el("button", "picker-entry")
+            entry.type = "button"
+            entry.title = "Entry point"
+            entry.innerHTML = svg("folder")
+            entry.append(el("span", "", pickedEntry(s)))
+            entry.onclick = () => chooseEntry(s, undefined, render)
+            head.append(avatarOf(s), text, entry)
             const modes = el("div", "picker-modes")
             for (const b of $("mode-dialog").querySelectorAll("[data-mode]")) {
               const name = b.querySelector("b").textContent
@@ -674,7 +752,7 @@
               open.title = `${name} on ${s.name}`
               open.innerHTML = b.querySelector("svg").outerHTML
               open.append(el("span", "", name))
-              open.onclick = () => connect(s, b.dataset.mode)
+              open.onclick = () => connect(s, b.dataset.mode, pickedEntry(s))
               modes.append(open)
             }
             li.append(head, modes)
@@ -793,6 +871,22 @@
           const editors = servers.filter((s) => s.connected)
           $("shells").hidden = !shells.length && !editors.length
           $("shells-count").textContent = shells.length + editors.length
+          $("shells-end").onclick = async () => {
+            const what = [shells.length && `${shells.length} shell(s)`, editors.length && `${editors.length} VS Code`]
+            const sure = await ask(
+              "End all sessions?",
+              `${what.filter(Boolean).join(" and ")} will end. Programs running in them are stopped.`,
+              "End all",
+            )
+            if (!sure) return
+            const results = await Promise.allSettled([
+              ...shells.map((sh) => request("DELETE", `${base}/remote-shells/${sh.id}`)),
+              ...editors.map((s) => request("POST", `${api}/${s.id}/disconnect`)),
+            ])
+            const failed = results.filter((r) => r.status === "rejected").length
+            toast(failed ? `Failed to end ${failed} session(s)` : "Ended all sessions", !!failed)
+            load()
+          }
           $("shell-list").replaceChildren(
             ...editors.map((s) =>
               sessionRow(
@@ -801,12 +895,12 @@
                 `VS Code · ${s.host}`,
                 `Open VS Code on ${s.name}`,
                 () => openEditor(s),
-                () => confirm(`Disconnect VS Code from ${s.name}?`) && disconnect(s),
+                async () => (await ask("Disconnect VS Code?", `VS Code on ${s.name} will stop.`, "Disconnect")) && disconnect(s),
                 "Disconnect",
               ),
             ),
             ...shells.map((sh) => {
-              const meta = `${sh.folder || "~"} · started ${ago(sh.started)}${sh.clients ? " · open elsewhere" : ""}`
+              const meta = `${sh.lastCommand ? "$ " + sh.lastCommand + " · " : ""}${sh.folder || "~"} · started ${ago(sh.started)}${sh.clients ? " · open elsewhere" : ""}`
               const resume = () =>
                 shell(
                   servers.find((s) => s.id === sh.serverId) || { id: sh.serverId, name: sh.name },
@@ -815,7 +909,7 @@
                   sh.id,
                 )
               const end = async () => {
-                if (!confirm(`End the shell on ${sh.name}? Programs running in it are stopped.`)) return
+                if (!(await ask("End shell?", `The shell on ${sh.name} will end. Programs running in it are stopped.`, "End shell"))) return
                 try {
                   await request("DELETE", `${base}/remote-shells/${sh.id}`)
                   toast(`Ended the shell on ${sh.name}`)
@@ -924,19 +1018,16 @@
         }
       }
 
-      const choose = (s) => {
-        if (connecting) return
-        const modeDialog = $("mode-dialog")
-        $("mode-title").textContent = `Open ${s.name}`
-        // Default starts in the server's folder, else home. The last pick is remembered.
-        const entryKey = "entry-" + s.id
-        const entries = () => [{ name: "Default", path: s.folder || "~/" }, ...(s.entries || [])]
-        let picked = storage(entryKey)
-        const pick = (path) => storage(entryKey, (picked = path))
+      // Pick, add or remove the server's entry points; folder fills in the form.
+      const chooseEntry = (s, folder, done) => {
+        const dialog = $("entry-dialog")
+        $("entry-title").textContent = `Entry points · ${s.name}`
+        let picked = pickedEntry(s)
+        const pick = (path) => storage("entry-" + s.id, (picked = path))
         const drawEntries = () => {
-          if (!entries().some((e) => e.path === picked)) picked = entries()[0].path
+          if (!entriesOf(s).some((e) => e.path === picked)) picked = entriesOf(s)[0].path
           $("entry-list").replaceChildren(
-            ...entries().map((e, i) => {
+            ...entriesOf(s).map((e, i) => {
               const row = el("label", "entry")
               const radio = el("input")
               radio.type = "radio"
@@ -953,7 +1044,7 @@
         }
         const saveEntries = async (list) => {
           try {
-            s.entries = (await request("PUT", `${api}/${s.id}/entries`, { entries: list })).entries
+            await putEntries(s, list)
             drawEntries()
           } catch (error) {
             toast(`Failed to save entry points: ${error.message}`, true)
@@ -961,6 +1052,11 @@
         }
         const entryForm = $("entry-form")
         entryForm.reset()
+        if (folder) {
+          // The server takes names up to 40 characters.
+          entryForm.name.value = (folder.split("/").pop() || "/").slice(0, 40)
+          entryForm.path.value = folder
+        }
         entryForm.onsubmit = (e) => {
           e.preventDefault()
           const entry = Object.fromEntries(new FormData(entryForm))
@@ -969,11 +1065,27 @@
           saveEntries([...(s.entries || []), entry])
         }
         drawEntries()
+        dialog.onclose = done
+        dialog.showModal()
+      }
+
+      const choose = (s) => {
+        if (connecting) return
+        const modeDialog = $("mode-dialog")
+        $("mode-title").textContent = `Open ${s.name}`
+        const drawEntry = () => {
+          const path = pickedEntry(s)
+          const [name, small] = $("mode-entry").querySelectorAll("b, small")
+          name.textContent = entriesOf(s).find((e) => e.path === path).name
+          small.textContent = path
+        }
+        $("mode-entry").onclick = () => chooseEntry(s, undefined, drawEntry)
+        drawEntry()
         modeDialog.querySelectorAll("[data-mode]").forEach(
           (b) =>
             (b.onclick = () => {
               modeDialog.close()
-              connect(s, b.dataset.mode, picked)
+              connect(s, b.dataset.mode, pickedEntry(s))
             }),
         )
         modeDialog.showModal()
@@ -1036,8 +1148,6 @@
 
       // Query that reopens the shell, files or VS Code shown now, for moving it into a split pane.
       let here
-      // For the split view closing: what this pane shows, if anything.
-      window.paneView = () => ([...document.querySelectorAll("body > .shell")].some((e) => !e.hidden) ? here : "")
       let editorPrevTitle
       const openEditor = (s, folder) => {
         const q = folder ? "?folder=" + encodeURIComponent(folder) : ""
@@ -1217,150 +1327,13 @@
       const KO = "ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔㅁㄴㅇㄹㅎㅗㅓㅏㅣㅋㅌㅊㅍㅠㅜㅡㅃㅉㄸㄲㅆㅒㅖ"
       const EN = "qwertyuiopasdfghjklzxcvbnmqwertop"
 
-      let closeShell = () => {}
-      // Opens a new shell, or reattaches to a running one when id is given.
-      const shell = (s, creds = {}, folder, id) => {
-        closeShell()
-        const prevTitle = document.title
-        document.title = `${s.name} · Shell`
-        $("shell-title").textContent = s.name
-        $("shell").hidden = false
-        const box = $("term")
-        const term = new Terminal({
-          cursorBlink: true,
-          fontFamily: 'Menlo, Consolas, "DejaVu Sans Mono", monospace',
-          fontSize: 14,
-          lineHeight: 1.2,
-          // VS Code Dark Modern terminal colors.
-          theme: {
-            background: "#181818",
-            foreground: "#cccccc",
-            cursor: "#aeafad",
-            selectionBackground: "#264f78",
-            black: "#000000",
-            red: "#cd3131",
-            green: "#0dbc79",
-            yellow: "#e5e510",
-            blue: "#2472c8",
-            magenta: "#bc3fbc",
-            cyan: "#11a8cd",
-            white: "#e5e5e5",
-            brightBlack: "#666666",
-            brightRed: "#f14c4c",
-            brightGreen: "#23d18b",
-            brightYellow: "#f5f543",
-            brightBlue: "#3b8eea",
-            brightMagenta: "#d670d6",
-            brightCyan: "#29b8db",
-            brightWhite: "#e5e5e5",
-          },
-        })
-        term.open(box)
-        const url = new URL(`${base}/remote-shell/${s.id}`, location.href)
-        url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
-        const attach = !!id
-        id ||= [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, "0")).join("")
-        here = `shell=${encodeURIComponent(s.id)}&attach=${id}`
-        let ws
-        let opened = false
-        let closed = false
-        let dropped = false
-        let retry
-        // Keys typed while (re)connecting wait for the shell instead of being dropped.
-        const pending = []
-        const send = (msg) => {
-          if (typeof msg.d === "string") track(msg.d)
-          if (opened && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
-          else if (msg.d !== undefined) pending.push(msg)
-        }
-        // Autosuggest: follow what's typed on the prompt line and offer past commands
-        // that start with it. Arrows, Tab, Ctrl+… move the cursor in ways we can't
-        // follow, so suggestions stop until the next Enter.
-        const histKey = "history-" + s.id
-        const history = JSON.parse(storage(histKey) || "[]")
-        const ghost = $("ghost")
-        const suggest = $("suggest")
-        let line = ""
-        let lost = false
-        let hint = ""
-        // Text on the cursor row (with wrapped rows above) up to the cursor.
-        const screenLine = () => {
-          const b = term.buffer.active
-          let y = b.baseY + b.cursorY
-          let text = b.getLine(y)?.translateToString(true, 0, b.cursorX) || ""
-          while (y > 0 && b.getLine(y)?.isWrapped) text = b.getLine(--y).translateToString() + text
-          return text
-        }
-        const track = (d) => {
-          if (d === "\x1b[I" || d === "\x1b[O") return
-          if (d[0] === "\x1b") lost = true
-          else
-            for (const ch of d) {
-              if (ch === "\r") {
-                // Only echoed lines are kept, so passwords never land in history.
-                const cmd = line.trim()
-                if (!lost && cmd && screenLine().trimEnd().endsWith(line.trimEnd())) {
-                  const i = history.indexOf(cmd)
-                  if (i >= 0) history.splice(i, 1)
-                  history.unshift(cmd)
-                  history.length = Math.min(history.length, 500)
-                  storage(histKey, JSON.stringify(history))
-                }
-                line = ""
-                lost = false
-              } else if (ch === "\x03" || ch === "\x15") {
-                line = ""
-                lost = false
-              } else if (ch === "\x7f" || ch === "\b") line = [...line].slice(0, -1).join("")
-              else if (ch < " ") lost = true
-              else line += ch
-            }
-          if (lost) showHints()
-        }
-        // Called after output is drawn, so the typed text has been echoed. At most once a
-        // frame: it measures the screen, which slows fast typing when run per key.
-        let hintFrame = 0
-        const showHints = () => (hintFrame ||= requestAnimationFrame(drawHints))
-        const drawHints = () => {
-          hintFrame = 0
-          if (closed) return
-          const b = term.buffer.active
-          const matches =
-            lost || line.trim().length < 2 || b.type === "alternate" || !screenLine().endsWith(line)
-              ? []
-              : [...new Set([...history, ...COMMON])].filter((c) => c.startsWith(line) && c !== line).slice(0, 5)
-          hint = matches[0] || ""
-          suggest.hidden = !hint
-          suggest.replaceChildren(
-            ...matches.map((m) => {
-              const c = el("button", "", m)
-              c.type = "button"
-              c.tabIndex = -1
-              c.onclick = () => line && m.startsWith(line) && input(m.slice(line.length))
-              return c
-            }),
-          )
-          const cell = term._core._renderService.dimensions.css.cell
-          ghost.hidden = !hint || b.viewportY !== b.baseY || !cell.width
-          if (ghost.hidden) return
-          const screen = box.querySelector(".xterm-screen").getBoundingClientRect()
-          const origin = box.getBoundingClientRect()
-          Object.assign(ghost.style, {
-            left: screen.left - origin.left + b.cursorX * cell.width + "px",
-            top: screen.top - origin.top + b.cursorY * cell.height + "px",
-            lineHeight: cell.height + "px",
-            maxWidth: (term.cols - b.cursorX) * cell.width + "px",
-          })
-          ghost.textContent = hint.slice(line.length)
-        }
-        const fit = () => {
-          // ponytail: private cell size, same as @xterm/addon-fit reads (the addon isn't shipped).
-          const cell = term._core._renderService.dimensions.css.cell
-          if (!cell.width || !cell.height) return
-          const cols = Math.max(2, Math.floor((box.clientWidth - 8) / cell.width))
-          const rows = Math.max(1, Math.floor((box.clientHeight - 8) / cell.height))
-          if (cols !== term.cols || rows !== term.rows) term.resize(cols, rows)
-        }
+      // ponytail: touch points, not (pointer: coarse), which tablets with a pen or
+      // trackpad fail; touchscreen laptops count as touch too.
+      const touch = navigator.maxTouchPoints > 0
+      // Key bar and on-screen keyboard, typing into target: a shell, or the split view's active pane.
+      // Returns the input function, which also takes the shell's own typed keys (sticky Ctrl/Alt apply).
+      let keyboardRepeat
+      const keyboard = (target) => {
         // Sticky Ctrl/Alt from the key bar apply to the next key, typed or tapped.
         const keys = $("keys")
         const mods = { ctrl: false, alt: false }
@@ -1375,35 +1348,24 @@
         const input = (d, compose) => {
           if (!compose) composing = NO_HANGUL
           // Focus reports (apps like Claude Code ask for them) aren't key presses.
-          if (d === "\x1b[I" || d === "\x1b[O") return send({ d })
-          // xterm's touch scroll in mouse mode reports NaN coordinates; use the touched cell.
-          d = d.replace(/(\x1b\[<\d+;)NaN;NaN(?=[Mm])/g, (_, head) => {
-            const r = term.element.querySelector(".xterm-screen").getBoundingClientRect()
-            const cell = (p, start, size, n) => Math.min(Math.max(Math.floor(((p - start) / size) * n), 0), n - 1) + 1
-            const t = touchStart || { clientX: r.left, clientY: r.top }
-            return `${head}${cell(t.clientX, r.left, r.width, term.cols)};${cell(t.clientY, r.top, r.height, term.rows)}`
-          })
-          // → at the end of the line takes the suggestion, like fish.
-          if (hint && (d === "\x1b[C" || d === "\x1bOC")) d = hint.slice(line.length)
+          if (d === "\x1b[I" || d === "\x1b[O") return target.raw(d)
           if ((mods.ctrl || mods.alt) && KO.includes(d)) d = EN[KO.indexOf(d)]
           const c = d.length === 1 ? d.toUpperCase().charCodeAt(0) : 0
           if (mods.ctrl && c >= 64 && c < 96) d = String.fromCharCode(c & 31)
           if (mods.alt) d = "\x1b" + d
           setMod("ctrl", false)
           setMod("alt", false)
-          send({ d })
+          target.deliver(d)
         }
         // The clipboard API needs HTTPS (and may be refused); else the OS paste goes into a prompt.
         const paste = async () => {
           const text = await navigator.clipboard?.readText().catch(() => undefined)
           const pasted = text ?? prompt("Paste here")
-          // xterm wraps it for bracketed paste mode and sends it through input().
-          if (pasted) term.paste(pasted)
-          term.focus()
+          if (pasted) target.paste(pasted)
         }
         // Don't take focus from the terminal, or the soft keyboard closes.
         const combos = $("combos")
-        keys.onmousedown = combos.onmousedown = suggest.onmousedown = (e) => e.preventDefault()
+        keys.onmousedown = combos.onmousedown = (e) => e.preventDefault()
         keys.oncontextmenu = (e) => e.preventDefault()
         combos.hidden = true
         let pressTimer
@@ -1423,7 +1385,7 @@
                 c.tabIndex = -1
                 c.onclick = () => {
                   combos.hidden = true
-                  send({ d: seq })
+                  target.raw(seq)
                 }
                 return c
               }),
@@ -1441,14 +1403,8 @@
           if (b.id === "paste") return paste()
           combos.hidden = true
           if (b.dataset.mod) setMod(b.dataset.mod, !mods[b.dataset.mod])
-          else input(keySeq(b.dataset.key, term.modes.applicationCursorKeysMode))
+          else input(keySeq(b.dataset.key, target.appCursor()))
         }
-        // On touch screens the OS keyboard covers the terminal and mangles input
-        // (autocorrect, Korean jamo), so it stays closed and this one types instead.
-        // ponytail: touch points, not (pointer: coarse), which tablets with a pen or
-        // trackpad fail; touchscreen laptops count as touch too.
-        const touch = navigator.maxTouchPoints > 0
-        if (touch) term.textarea.setAttribute("inputmode", "none")
         const kbd = $("kbd")
         let layer = "abc"
         let letters = "abc"
@@ -1457,7 +1413,6 @@
         const SHIFT_ONCE = 1
         const SHIFT_LOCK = 2
         let shift = SHIFT_OFF
-        let repeat
         const drawKbd = () =>
           kbd.replaceChildren(
             ...KBD[layer].map((row) => {
@@ -1542,13 +1497,208 @@
           if (b.dataset.k !== "bksp") return
           const again = () => {
             press("bksp")
-            repeat = setTimeout(again, 60)
+            keyboardRepeat = setTimeout(again, 60)
           }
-          repeat = setTimeout(again, 400)
+          keyboardRepeat = setTimeout(again, 400)
         }
-        kbd.onpointerup = kbd.onpointercancel = kbd.onpointerleave = () => clearTimeout(repeat)
+        kbd.onpointerup = kbd.onpointercancel = kbd.onpointerleave = () => clearTimeout(keyboardRepeat)
         kbd.oncontextmenu = kbd.onmousedown = (e) => e.preventDefault()
+        return input
+      }
+
+      let closeShell = () => {}
+      // Opens a new shell, or reattaches to a running one when id is given.
+      const shell = (s, creds = {}, folder, id) => {
+        closeShell()
+        const prevTitle = document.title
+        document.title = `${s.name} · Shell`
+        $("shell-title").textContent = s.name
+        $("shell").hidden = false
+        const box = $("term")
+        const term = new Terminal({
+          cursorBlink: true,
+          fontFamily: 'Menlo, Consolas, "DejaVu Sans Mono", monospace',
+          fontSize: +storage("font-size") || 14,
+          lineHeight: 1.2,
+          // VS Code Dark Modern terminal colors.
+          theme: {
+            background: "#181818",
+            foreground: "#cccccc",
+            cursor: "#aeafad",
+            selectionBackground: "#264f78",
+            black: "#000000",
+            red: "#cd3131",
+            green: "#0dbc79",
+            yellow: "#e5e510",
+            blue: "#2472c8",
+            magenta: "#bc3fbc",
+            cyan: "#11a8cd",
+            white: "#e5e5e5",
+            brightBlack: "#666666",
+            brightRed: "#f14c4c",
+            brightGreen: "#23d18b",
+            brightYellow: "#f5f543",
+            brightBlue: "#3b8eea",
+            brightMagenta: "#d670d6",
+            brightCyan: "#29b8db",
+            brightWhite: "#e5e5e5",
+          },
+        })
+        term.open(box)
+        const url = new URL(`${base}/remote-shell/${s.id}`, location.href)
+        url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
+        const attach = !!id
+        id ||= [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, "0")).join("")
+        here = `shell=${encodeURIComponent(s.id)}&attach=${id}`
+        let ws
+        let opened = false
+        let closed = false
+        let dropped = false
+        let retry
+        // Keys typed while (re)connecting wait for the shell instead of being dropped.
+        const pending = []
+        const send = (msg) => {
+          if (typeof msg.d === "string") track(msg.d)
+          if (opened && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
+          else if (msg.d !== undefined) pending.push(msg)
+        }
+        // Autosuggest: follow what's typed on the prompt line and offer past commands
+        // that start with it. Arrows, Tab, Ctrl+… move the cursor in ways we can't
+        // follow, so suggestions stop until the next Enter.
+        const histKey = "history-" + s.id
+        const history = JSON.parse(storage(histKey) || "[]")
+        const ghost = $("ghost")
+        const suggest = $("suggest")
+        let line = ""
+        let lost = false
+        let hint = ""
+        // Text on the cursor row (with wrapped rows above) up to the cursor.
+        const screenLine = () => {
+          const b = term.buffer.active
+          let y = b.baseY + b.cursorY
+          let text = b.getLine(y)?.translateToString(true, 0, b.cursorX) || ""
+          while (y > 0 && b.getLine(y)?.isWrapped) text = b.getLine(--y).translateToString() + text
+          return text
+        }
+        const track = (d) => {
+          if (d === "\x1b[I" || d === "\x1b[O") return
+          if (d[0] === "\x1b") lost = true
+          else
+            for (const ch of d) {
+              if (ch === "\r") {
+                // Only echoed lines are kept, so passwords never land in history.
+                const cmd = line.trim()
+                if (!lost && cmd && screenLine().trimEnd().endsWith(line.trimEnd())) {
+                  const i = history.indexOf(cmd)
+                  if (i >= 0) history.splice(i, 1)
+                  history.unshift(cmd)
+                  history.length = Math.min(history.length, 500)
+                  storage(histKey, JSON.stringify(history))
+                  // Shown in Running Sessions.
+                  send({ cmd })
+                }
+                line = ""
+                lost = false
+              } else if (ch === "\x03" || ch === "\x15") {
+                line = ""
+                lost = false
+              } else if (ch === "\x7f" || ch === "\b") line = [...line].slice(0, -1).join("")
+              else if (ch < " ") lost = true
+              else line += ch
+            }
+          if (lost) showHints()
+        }
+        // Called after output is drawn, so the typed text has been echoed. At most once a
+        // frame: it measures the screen, which slows fast typing when run per key.
+        let hintFrame = 0
+        const showHints = () => (hintFrame ||= requestAnimationFrame(drawHints))
+        const drawHints = () => {
+          hintFrame = 0
+          if (closed) return
+          const b = term.buffer.active
+          const matches =
+            lost || line.trim().length < 2 || b.type === "alternate" || !screenLine().endsWith(line)
+              ? []
+              : [...new Set([...history, ...COMMON])].filter((c) => c.startsWith(line) && c !== line).slice(0, 5)
+          hint = matches[0] || ""
+          suggest.hidden = !hint
+          suggest.replaceChildren(
+            ...matches.map((m) => {
+              const c = el("button", "", m)
+              c.type = "button"
+              c.tabIndex = -1
+              c.onclick = () => line && m.startsWith(line) && input(m.slice(line.length))
+              return c
+            }),
+          )
+          const cell = term._core._renderService.dimensions.css.cell
+          ghost.hidden = !hint || b.viewportY !== b.baseY || !cell.width
+          if (ghost.hidden) return
+          const screen = box.querySelector(".xterm-screen").getBoundingClientRect()
+          const origin = box.getBoundingClientRect()
+          Object.assign(ghost.style, {
+            left: screen.left - origin.left + b.cursorX * cell.width + "px",
+            top: screen.top - origin.top + b.cursorY * cell.height + "px",
+            lineHeight: cell.height + "px",
+            maxWidth: (term.cols - b.cursorX) * cell.width + "px",
+          })
+          ghost.textContent = hint.slice(line.length)
+        }
+        const fit = () => {
+          // ponytail: private cell size, same as @xterm/addon-fit reads (the addon isn't shipped).
+          const cell = term._core._renderService.dimensions.css.cell
+          if (!cell.width || !cell.height) return
+          const cols = Math.max(2, Math.floor((box.clientWidth - 8) / cell.width))
+          const rows = Math.max(1, Math.floor((box.clientHeight - 8) / cell.height))
+          if (cols !== term.cols || rows !== term.rows) term.resize(cols, rows)
+        }
+        // What the key bar and on-screen keyboard type into; in a split view, its shared keyboard too.
+        const target = {
+          deliver: (d) => {
+            // xterm's touch scroll in mouse mode reports NaN coordinates; use the touched cell.
+            d = d.replace(/(\x1b\[<\d+;)NaN;NaN(?=[Mm])/g, (_, head) => {
+              const r = term.element.querySelector(".xterm-screen").getBoundingClientRect()
+              const cell = (p, start, size, n) => Math.min(Math.max(Math.floor(((p - start) / size) * n), 0), n - 1) + 1
+              const t = touchStart || { clientX: r.left, clientY: r.top }
+              return `${head}${cell(t.clientX, r.left, r.width, term.cols)};${cell(t.clientY, r.top, r.height, term.rows)}`
+            })
+            // → at the end of the line takes the suggestion, like fish.
+            if (hint && (d === "\x1b[C" || d === "\x1bOC")) d = hint.slice(line.length)
+            send({ d })
+          },
+          raw: (d) => send({ d }),
+          appCursor: () => term.modes.applicationCursorKeysMode,
+          paste: (text) => {
+            // xterm wraps it for bracketed paste mode and sends it through input().
+            term.paste(text)
+            term.focus()
+          },
+        }
+        const input = keyboard(target)
+        const combos = $("combos")
+        suggest.onmousedown = (e) => e.preventDefault()
+        // On touch screens the OS keyboard covers the terminal and mangles input
+        // (autocorrect, Korean jamo), so it stays closed and the on-screen one types instead.
+        if (touch) term.textarea.setAttribute("inputmode", "none")
+        // A split view types into the last touched pane with a shell.
+        if (pane) {
+          window.shellTarget = target
+          parent.paneShell?.(frameElement)
+        }
         term.onResize(({ cols, rows }) => send({ cols, rows }))
+        // Text size, kept for every shell; fit() then sends the new cols and rows.
+        const zoom = (step) => {
+          const size = Math.min(32, Math.max(8, term.options.fontSize + step))
+          term.options.fontSize = size
+          storage("font-size", size)
+          // After the renderer has measured the new cell size.
+          requestAnimationFrame(() => {
+            fit()
+            showHints()
+          })
+        }
+        $("font-down").onclick = () => zoom(-1)
+        $("font-up").onclick = () => zoom(1)
         term.onData(input)
         // xterm cancels touch events, so a tap never focuses it. Taps (not scrolls)
         // focus it for hardware keyboards.
@@ -1617,7 +1767,11 @@
           vv?.removeEventListener("resize", onViewport)
           vv?.removeEventListener("scroll", onViewport)
           ro.disconnect()
-          clearTimeout(repeat)
+          clearTimeout(keyboardRepeat)
+          if (pane) {
+            window.shellTarget = undefined
+            parent.paneShell?.()
+          }
           document.removeEventListener("visibilitychange", wake)
           window.removeEventListener("online", wake)
           // Detach only; the shell keeps running.
@@ -1808,7 +1962,12 @@
               b.append(el("span", "file-name", e.name + (e.link ? " ↗" : "")), el("span", "file-meta", meta), el("span", "file-date", date))
               b.onclick = () => (e.up ? open(cwd.replace(/\/[^/]*$/, "") || "/") : e.dir ? open(join(e.name)) : show(e))
               li.append(b)
-              if (!e.up) li.append(iconButton("trash", `Delete ${e.name}`, () => remove(e), "danger file-delete"))
+              if (!e.up) {
+                li.append(
+                  iconButton("send", `Send ${e.name} to a server`, () => send(e), "file-delete"),
+                  iconButton("trash", `Delete ${e.name}`, () => remove(e), "danger file-delete"),
+                )
+              }
               return li
             }),
           )
@@ -1952,6 +2111,94 @@
             toast(`Failed to delete ${e.name}: ${error.message}`, true)
           }
         }
+        // Into a folder on any server, the entry points offered; the target signs in if needed.
+        const send = (e) => {
+          const p = join(e.name)
+          const form = $("send-form")
+          $("send-title").textContent = `Send ${e.name}`
+          form.to.replaceChildren(
+            ...servers.map((t) => {
+              const o = el("option", "", t.id === s.id ? `${t.name} (this server)` : t.name)
+              o.value = t.id
+              return o
+            }),
+          )
+          const target = () => servers.find((t) => t.id === form.to.value)
+          const fill = () => {
+            const t = target()
+            form.dest.value = t.id === s.id ? cwd : pickedEntry(t)
+            $("send-entries").replaceChildren(
+              ...entriesOf(t).map((x) => {
+                const o = el("option", "", x.name)
+                o.value = x.path
+                return o
+              }),
+            )
+          }
+          form.to.value = storage("send-to") || s.id
+          if (!target()) form.to.value = s.id
+          fill()
+          form.to.onchange = fill
+          const transfer = async (t, dest, creds) => {
+            try {
+              await request("POST", `${api}/${t.id}/files/open`, creds || {})
+            } catch (error) {
+              if (!creds && !t.hasPassword) return signIn(t, (creds) => transfer(t, dest, creds))
+              return toast(`Failed to connect to ${t.name}: ${error.message}`, true)
+            }
+            // Checks fail with a status; then NDJSON: {total}, {sent}…, then {done} or {error}.
+            const copy = async (overwrite) => {
+              const res = await fetch(`${fapi}/copy`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ path: p, to: t.id, dest, overwrite }),
+              })
+              if (!res.ok) {
+                const json = await res.json().catch(() => ({}))
+                throw Object.assign(new Error(json.error || res.statusText), { status: res.status })
+              }
+              const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
+              let rest = ""
+              let total = 0
+              for (;;) {
+                const { value, done } = await reader.read()
+                if (done) throw new Error("Connection lost")
+                const lines = (rest + value).split("\n")
+                rest = lines.pop()
+                for (const msg of lines.map((l) => JSON.parse(l))) {
+                  if (msg.error) throw new Error(msg.error)
+                  if (msg.done) return
+                  if (msg.total !== undefined) total = msg.total
+                  // Folder sizes are estimates, so it stays under 100% until done.
+                  const pct = total ? Math.min(99, Math.floor(((msg.sent || 0) / total) * 100)) : 0
+                  const of = total ? ` of ${bytes(total)}` : ""
+                  toast(`Sending ${e.name} to ${t.name}… ${pct}% (${bytes(msg.sent || 0)}${of})`, false, pct)
+                }
+              }
+            }
+            toast(`Sending ${e.name} to ${t.name}…`, false, 0)
+            try {
+              try {
+                await copy(false)
+              } catch (error) {
+                if (error.status !== 409) throw error
+                if (!confirm(`"${e.name}" already exists in ${dest} on ${t.name}. Replace it?`)) return
+                await copy(true)
+              }
+              toast(`Sent ${e.name} to ${dest} on ${t.name}`)
+              if (t.id === s.id) open(cwd)
+            } catch (error) {
+              toast(`Failed to send ${e.name}: ${error.message}`, true)
+            }
+          }
+          form.onsubmit = (ev) => {
+            ev.preventDefault()
+            storage("send-to", form.to.value)
+            $("send-dialog").close()
+            transfer(target(), form.dest.value.trim())
+          }
+          $("send-dialog").showModal()
+        }
         const upload = async (list) => {
           const into = cwd
           let done = 0
@@ -1993,6 +2240,7 @@
         // The shell opens over the file browser; closing it comes back here.
         $("files-code").onclick = () => connect(s, "code", cwd)
         $("files-shell").onclick = () => connect(s, "shell", cwd)
+        $("files-entry").onclick = () => chooseEntry(s, cwd)
         $("files-hidden").onclick = () => {
           hidden = !hidden
           storage("files-hidden", hidden ? "1" : "0")
@@ -2110,6 +2358,7 @@
         const d = el("div", "pane-divider")
         d.setAttribute("role", "separator")
         d.setAttribute("aria-label", "Resize panes")
+        d.title = "Drag to resize, double-click for equal sizes"
         d.tabIndex = 0
         const resize = (pos) => {
           const panes = $("panes")
@@ -2127,8 +2376,17 @@
           b.style.flexGrow = both - first
           storage("pane-sizes-" + frames.length, JSON.stringify(frames.map((f) => +f.style.flexGrow)))
         }
+        // Double click or tap: every pane the same size. Timed here, as touch screens may send no dblclick.
+        let lastDown = 0
         d.onpointerdown = (e) => {
           e.preventDefault()
+          if (e.timeStamp - lastDown < 350) {
+            lastDown = 0
+            const frames = [...$("panes").querySelectorAll(".pane-frame")]
+            frames.forEach((f) => (f.style.flexGrow = 1))
+            return storage("pane-sizes-" + frames.length, JSON.stringify(frames.map(() => 1)))
+          }
+          lastDown = e.timeStamp
           d.setPointerCapture(e.pointerId)
           $("panes").classList.add("resizing")
           d.onpointermove = (e) => resize((column) => (column ? e.clientY : e.clientX))
@@ -2148,6 +2406,28 @@
       }
 
       // Split view; removing a pane only detaches its shell, like closing it.
+      const PANE_MAX = 4
+      // One key bar and on-screen keyboard for the whole split view, borrowed from the (hidden)
+      // shell view; it types into the last touched pane with a shell. Other panes don't change it.
+      let typingPane
+      const typingShell = () => {
+        const frames = [...$("panes").querySelectorAll(".pane-frame")].filter((f) => f.contentWindow?.shellTarget)
+        if (!frames.includes(typingPane)) typingPane = frames[0]
+        for (const f of $("panes").querySelectorAll(".pane-frame")) f.classList.toggle("typing", f === typingPane && frames.length > 1)
+        $("split").classList.toggle("no-shell", !typingPane)
+        return typingPane?.contentWindow.shellTarget
+      }
+      const splitTarget = {
+        deliver: (d) => typingShell()?.deliver(d),
+        raw: (d) => typingShell()?.raw(d),
+        appCursor: () => typingShell()?.appCursor() ?? false,
+        paste: (text) => typingShell()?.paste(text),
+      }
+      // Panes call this when a shell opens or is touched (f), or closes (no f).
+      window.paneShell = (f) => {
+        if (f) typingPane = f
+        typingShell()
+      }
       const setPanes = (n, first) => {
         const panes = $("panes")
         const frames = () => panes.querySelectorAll(".pane-frame")
@@ -2167,15 +2447,19 @@
         // Pane sizes are flex weights, remembered per layout.
         const sizes = JSON.parse(storage("pane-sizes-" + n) || "[]")
         frames().forEach((f, i) => (f.style.flexGrow = sizes.length === n ? sizes[i] : 1))
-        $("split")
-          .querySelectorAll("[data-panes]")
-          .forEach((b) => b.setAttribute("aria-pressed", +b.dataset.panes === n))
+        $("split-add").disabled = n >= PANE_MAX
+        if ($("split").hidden) {
+          $("split").append($("combos"), $("keys"), $("kbd"))
+          keyboard(splitTarget)
+        }
+        typingShell()
         $("split").hidden = false
         document.title = "Split view"
         // Reloading keeps the layout; running shells are resumed from each pane's list.
         history.replaceState(null, "", "?split=" + n)
       }
-      $("split-open").onclick = () => setPanes(+storage("panes") || 2)
+      // A new split always starts with two panes (the view moved into it, plus one); reloads keep the count.
+      $("split-open").onclick = () => setPanes(2)
       // From a shell, files or VS Code: it becomes the first pane (a shell reattaches there).
       // In a pane, the same button ends the split and keeps this pane's view full screen.
       document.querySelectorAll(".split-here").forEach((b) => {
@@ -2191,53 +2475,39 @@
             if (view === "shell") closeShell()
             else if (view === "files") closeFiles()
             else $("editor-close").click()
-          setPanes(+storage("panes") || 2, first)
+          setPanes(2, first)
         }
       })
-      $("split")
-        .querySelectorAll("[data-panes]")
-        .forEach(
-          (b) =>
-            (b.onclick = () => {
-              storage("panes", b.dataset.panes)
-              setPanes(+b.dataset.panes)
-            }),
-        )
+      $("split-add").onclick = () => setPanes(Math.min(PANE_MAX, $("panes").querySelectorAll(".pane-frame").length + 1))
+      // A pane's own close buttons remove it (and the divider next to it); the last one ends the split.
+      window.removePane = (f) => {
+        ;(f.previousElementSibling || f.nextElementSibling)?.remove()
+        f.remove()
+        const frames = [...$("panes").querySelectorAll(".pane-frame")]
+        if (!frames.length) return closeSplit()
+        storage("pane-sizes-" + frames.length, JSON.stringify(frames.map((f) => +f.style.flexGrow || 1)))
+        $("split-add").disabled = false
+        typingShell()
+        history.replaceState(null, "", "?split=" + frames.length)
+      }
+      if (pane) {
+        // A touch on a shell pane makes it the one the split view's keyboard types into.
+        document.addEventListener("pointerdown", () => window.shellTarget && parent.paneShell?.(frameElement), true)
+        for (const id of ["picker-close", "shell-close", "files-close", "editor-close"]) {
+          $(id).addEventListener("click", () => parent.removePane?.(frameElement))
+        }
+      }
       const closeSplit = () => {
+        clearTimeout(keyboardRepeat)
+        $("shell").append($("combos"), $("keys"), $("kbd"))
         $("panes").replaceChildren()
         $("split").hidden = true
         document.title = "Servers"
         history.replaceState(null, "", location.pathname)
         load()
       }
-      // Asks which pane's shell, files or VS Code to keep full screen, unless none has one.
-      $("split-close").onclick = () => {
-        const option = (mode, title, sub, go) => {
-          const b = el("button", "mode")
-          b.type = "button"
-          b.innerHTML = mode ? $("mode-dialog").querySelector(`[data-mode="${mode}"] svg`).outerHTML : svg("monitor")
-          const text = el("span")
-          text.append(el("b", "", title), el("small", "", sub))
-          b.append(text)
-          b.onclick = go
-          return b
-        }
-        const kept = [...$("panes").querySelectorAll(".pane-frame")].flatMap((f, i) => {
-          const view = f.contentWindow.paneView?.()
-          if (!view) return []
-          const go = () => location.replace(location.pathname + "?" + view)
-          return [option(view.split("=")[0], `Pane ${i + 1}`, f.contentDocument.title, go)]
-        })
-        if (!kept.length) return closeSplit()
-        $("unsplit-list").replaceChildren(
-          ...kept,
-          option("", "Servers", "Close all panes", () => {
-            $("unsplit-dialog").close()
-            closeSplit()
-          }),
-        )
-        $("unsplit-dialog").showModal()
-      }
+      // Every pane at once; their shells keep running.
+      $("split-close").onclick = () => closeSplit()
 
       $("add").onclick = () => openForm()
       document.querySelectorAll("[data-close]").forEach((b) => (b.onclick = () => b.closest("dialog").close()))
@@ -2258,7 +2528,7 @@
 
       load().then(() => {
         const params = new URLSearchParams(location.search)
-        if (params.has("split")) return setPanes(+params.get("split") === 3 ? 3 : 2)
+        if (params.has("split")) return setPanes(Math.min(PANE_MAX, Math.max(1, +params.get("split") || 2)))
         const code = servers.find((s) => s.id === params.get("code"))
         if (code) return connect(code, "code", params.get("folder") || undefined)
         const sh = servers.find((s) => s.id === params.get("shell"))

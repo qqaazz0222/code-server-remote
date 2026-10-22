@@ -47,7 +47,8 @@ export interface EntryPoint {
 
 interface Session {
   proc: ChildProcess
-  port: number
+  /** Local end of the forward: a socket only this user can open, unlike a port on 127.0.0.1. */
+  socket: string
   ready: Promise<void>
   log: string[]
   /** Remote $HOME, for expanding ~ in ?folder=. */
@@ -80,8 +81,8 @@ async function writeServers(req: Request, servers: RemoteServer[]): Promise<void
   await fs.writeFile(storePath(req), JSON.stringify(servers, null, 2), { mode: 0o600 })
 }
 
-async function getServer(req: Request): Promise<RemoteServer> {
-  const server = (await readServers(req)).find((s) => s.id === req.params.id)
+async function getServer(req: Request, id = req.params.id): Promise<RemoteServer> {
+  const server = (await readServers(req)).find((s) => s.id === id)
   if (!server) {
     throw new HttpError("Server not found", HttpCode.NotFound)
   }
@@ -158,20 +159,10 @@ exec "$CS" --auth none --socket '${socket}' --socket-mode 600 --disable-update-c
 `
 }
 
-const freePort = () =>
-  new Promise<number>((resolve, reject) => {
-    const srv = net.createServer()
-    srv.on("error", reject)
-    srv.listen(0, "127.0.0.1", () => {
-      const port = (srv.address() as net.AddressInfo).port
-      srv.close(() => resolve(port))
-    })
-  })
-
-const healthy = (port: number) =>
+const healthy = (socketPath: string) =>
   new Promise<boolean>((resolve) => {
     http
-      .get({ host: "127.0.0.1", port, path: "/healthz", timeout: 2000 }, (res) => {
+      .get({ socketPath, path: "/healthz", timeout: 2000 }, (res) => {
         res.resume()
         resolve(res.statusCode === 200)
       })
@@ -287,19 +278,32 @@ function withCredentials(saved: RemoteServer, body: any): RemoteServer {
 const instanceId = (req: Request) =>
   crypto.createHash("sha1").update(req.args["user-data-dir"]).digest("hex").slice(0, 8)
 
+/**
+ * Local sockets (ssh control masters, editor forwards) live in a folder only
+ * this user can enter: in /tmp other users could connect to them, or plant
+ * their own under the same name first.
+ */
+async function socketDir(req: Request): Promise<string> {
+  const dir = path.join(req.args["user-data-dir"], "sockets")
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 })
+  await fs.chmod(dir, 0o700)
+  return dir
+}
+
 async function connect(req: Request, server: RemoteServer): Promise<Session> {
   const existing = sessions.get(server.id)
   if (existing) {
     return existing
   }
 
-  const port = await freePort()
+  const local = path.join(await socketDir(req), `code-${server.id}.sock`)
+  await fs.rm(local, { force: true })
   // Hex only, so safe unescaped.
   const socket = `/tmp/code-server-remote-${instanceId(req)}-${server.id}.sock`
   const { args, env } = await sshCommand(
     req,
     server,
-    ["-T", "-o", "ExitOnForwardFailure=yes", "-L", `127.0.0.1:${port}:${socket}`],
+    ["-T", "-o", "ExitOnForwardFailure=yes", "-o", "StreamLocalBindMask=0177", "-L", `${local}:${socket}`],
     "sh -s",
   )
 
@@ -331,7 +335,7 @@ async function connect(req: Request, server: RemoteServer): Promise<Session> {
 
   const ready = (async () => {
     const deadline = Date.now() + READY_TIMEOUT_MS
-    while (!(await healthy(port))) {
+    while (!(await healthy(local))) {
       if (exited) {
         throw new Error(log.slice(-15).join("\n") || "ssh exited")
       }
@@ -345,7 +349,7 @@ async function connect(req: Request, server: RemoteServer): Promise<Session> {
 
   const session: Session = {
     proc,
-    port,
+    socket: local,
     ready,
     log,
     get home() {
@@ -365,18 +369,27 @@ function disconnect(id: string): void {
 export const router = Router()
 
 router.get("/", async (req, res, next) => {
-  // Keep old links to the local editor working.
-  if (req.query.folder || req.query.workspace || req.query.ew) {
+  // Keep old links to the local editor working; this page's own views (files, VS Code) also take folder.
+  const own = ["pane", "files", "code", "shell", "split", "connect"].some((k) => k in req.query)
+  if (!own && (req.query.folder || req.query.workspace || req.query.ew)) {
     return next()
   }
   if (!(await authenticated(req))) {
     return redirect(req, res, "login", {})
   }
   const content = await fs.readFile(path.join(rootPath, "src/browser/pages/remote.html"), "utf8")
+  // Framed only by itself (split view panes), not by other sites.
+  res.setHeader("Content-Security-Policy", "frame-ancestors 'self'")
+  res.setHeader("X-Frame-Options", "SAMEORIGIN")
   res.send(replaceTemplates(req, content))
 })
 
 router.use("/remote-servers", ensureAuthenticated)
+// Changes must come from this page: the session cookie is SameSite=Lax, which
+// still lets sibling subdomains post forms here with it.
+router.use(["/remote-servers", "/remote-shells"], (req, res, next) =>
+  req.method === "GET" || req.method === "HEAD" ? next() : ensureOrigin(req, res, next),
+)
 
 router.get("/remote-servers", async (req, res) => {
   const servers = await readServers(req)
@@ -505,10 +518,10 @@ router.post("/remote-servers/:id/disconnect", async (req, res) => {
  * connection behind; listing and reading reuse it, so they need no credentials
  * (servers with a saved password or key also work without it).
  */
-const filesArgs = (req: Request, server: RemoteServer, master: boolean) => [
+const filesArgs = async (req: Request, server: RemoteServer, master: boolean) => [
   "-T",
   "-o",
-  `ControlPath=/tmp/cs-files-${instanceId(req)}-${server.id}`,
+  `ControlPath=${path.join(await socketDir(req), `files-${server.id}`)}`,
   "-o",
   master ? "ControlMaster=auto" : "ControlMaster=no",
   "-o",
@@ -540,7 +553,7 @@ const filesError = (code: number | null, stderr: string): HttpError =>
           : new HttpError(stderr.trim().split("\n").pop() || `Failed (exit ${code})`, HttpCode.ServerError)
 
 async function filesRun(req: Request, server: RemoteServer, command: string) {
-  const { args, env } = await sshCommand(req, server, filesArgs(req, server, false), command)
+  const { args, env } = await sshCommand(req, server, await filesArgs(req, server, false), command)
   const proc = spawn("ssh", args, { env, stdio: ["ignore", "pipe", "pipe"] })
   const stdout: Buffer[] = []
   let stderr = ""
@@ -584,6 +597,30 @@ export const removeCommand = (p: string) => {
   )
 }
 
+/** Remote command writing a file or folder as a tar stream, to unpack on another server. */
+export const packCommand = (p: string) =>
+  `{ [ -e ${quotePath(p)} ] || [ -L ${quotePath(p)} ]; } || exit ${NOT_FOUND}; ` +
+  `tar -C ${quotePath(path.posix.dirname(p))} -cf - -- ${quotePath(path.posix.basename(p))}`
+
+/** Remote command printing the bytes in a file, or (roughly, from du) in a folder. */
+export const sizeCommand = (p: string) => {
+  const q = quotePath(p)
+  return (
+    `{ [ -e ${q} ] || [ -L ${q} ]; } || exit ${NOT_FOUND}; ` +
+    `if [ -d ${q} ]; then echo $(( $(du -sk -- ${q} | cut -f1) * 1024 )); else wc -c < ${q}; fi`
+  )
+}
+
+/** Remote command failing unless `name` can be unpacked into the folder. */
+export const unpackCheckCommand = (dir: string, name: string, overwrite = false) =>
+  `cd ${quotePath(dir)} || exit ${NOT_FOUND}; ` +
+  (overwrite ? "" : `{ [ -e ${quotePath(name)} ] || [ -L ${quotePath(name)} ]; } && exit ${EXISTS}; `) +
+  "true"
+
+/** Remote command unpacking a tar stream of `name` (from packCommand) into a folder. */
+export const unpackCommand = (dir: string, name: string, overwrite = false) =>
+  `${unpackCheckCommand(dir, name, overwrite)} && tar -xf -`
+
 export interface FileEntry {
   name: string
   dir: boolean
@@ -614,7 +651,7 @@ export function parseListing(out: string): { path: string; entries: FileEntry[] 
 
 router.post("/remote-servers/:id/files/open", async (req, res) => {
   const server = withCredentials(await getServer(req), req.body)
-  const { args, env } = await sshCommand(req, server, filesArgs(req, server, true), "true")
+  const { args, env } = await sshCommand(req, server, await filesArgs(req, server, true), "true")
   // The master stays in the background holding ssh's fds, so wait for exit, not close.
   const proc = spawn("ssh", args, { env, stdio: ["ignore", "ignore", "pipe"] })
   let stderr = ""
@@ -657,7 +694,7 @@ router.get("/remote-servers/:id/files/raw", async (req, res) => {
   const p = filesPath(req.query.path)
   const max = Math.max(0, Math.floor(Number(req.query.max)) || 0)
   const server = await getServer(req)
-  const { args, env } = await sshCommand(req, server, filesArgs(req, server, false), readCommand(p, max))
+  const { args, env } = await sshCommand(req, server, await filesArgs(req, server, false), readCommand(p, max))
   const proc = spawn("ssh", args, { env, stdio: ["ignore", "pipe", "pipe"] })
   req.on("close", () => proc.kill())
   const name = path.posix.basename(p)
@@ -708,7 +745,7 @@ router.put("/remote-servers/:id/files/raw", async (req, res) => {
   const { args, env } = await sshCommand(
     req,
     server,
-    filesArgs(req, server, false),
+    await filesArgs(req, server, false),
     writeCommand(p, req.query.overwrite === "1"),
   )
   // The request body streams straight into the remote file.
@@ -726,17 +763,79 @@ router.put("/remote-servers/:id/files/raw", async (req, res) => {
   res.json({})
 })
 
+// Copies a file or folder into a folder on another (or the same) server, streamed
+// through here; both servers need a live login or saved credentials. Checks fail
+// with a status; after that the response is NDJSON: {total}, {sent}…, then {done}
+// or {error}.
+router.post("/remote-servers/:id/files/copy", async (req, res) => {
+  const p = filesPath(req.body?.path)
+  const dest = filesPath(req.body?.dest)
+  const name = path.posix.basename(p)
+  if (["", ".", "..", "~"].includes(name)) {
+    throw new HttpError("Invalid file name", HttpCode.BadRequest)
+  }
+  const from = await getServer(req)
+  const to = await getServer(req, String(req.body?.to))
+  const overwrite = !!req.body?.overwrite
+  await filesRun(req, to, unpackCheckCommand(dest, name, overwrite))
+  const total = Number(await filesRun(req, from, sizeCommand(p))) || 0
+  const pack = await sshCommand(req, from, await filesArgs(req, from, false), packCommand(p))
+  const unpack = await sshCommand(req, to, await filesArgs(req, to, false), unpackCommand(dest, name, overwrite))
+  const source = spawn("ssh", pack.args, { env: pack.env, stdio: ["ignore", "pipe", "pipe"] })
+  const target = spawn("ssh", unpack.args, { env: unpack.env, stdio: ["pipe", "ignore", "pipe"] })
+  target.stdin!.on("error", () => {}) // The target may exit (e.g. it exists) before reading it all.
+  source.stdout!.pipe(target.stdin!)
+  res.writeHead(200, { "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" })
+  const line = (msg: object) => {
+    res.write(JSON.stringify(msg) + "\n")
+    ;(res as any).flush?.() // Past the compression middleware.
+  }
+  line({ total })
+  let sent = 0
+  source.stdout!.on("data", (d: Buffer) => (sent += d.length))
+  const tick = setInterval(() => line({ sent }), 500)
+  res.on("close", () => {
+    if (!res.writableEnded) {
+      source.kill()
+      target.kill()
+    }
+  })
+  const stderr = ["", ""]
+  source.stderr!.on("data", (d) => (stderr[0] += d))
+  target.stderr!.on("data", (d) => (stderr[1] += d))
+  const exited = (proc: ChildProcess) =>
+    new Promise<number | null>((resolve) => {
+      proc.on("error", () => resolve(255))
+      proc.on("close", resolve)
+    })
+  const targetCode = exited(target).then((code) => {
+    if (code !== 0) source.kill() // Nothing is reading it any more.
+    return code
+  })
+  const [sourceCode, unpacked] = await Promise.all([exited(source), targetCode])
+  clearInterval(tick)
+  // The target's own checks come first: they stop it before the source has a say.
+  const error =
+    unpacked === EXISTS || unpacked === NOT_FOUND || unpacked === 255
+      ? filesError(unpacked, stderr[1])
+      : sourceCode !== 0
+        ? filesError(sourceCode, stderr[0])
+        : unpacked !== 0 && filesError(unpacked, stderr[1])
+  line(error ? { error: error.message } : { done: true, sent })
+  res.end()
+})
+
 router.delete("/remote-servers/:id/files", async (req, res) => {
   await filesRun(req, await getServer(req), removeCommand(filesPath(req.query.path)))
   res.json({})
 })
 
 /** Proxy /remote/<id>/* to the forwarded remote code-server. */
-const target = (req: Request, session: Session): string => {
+const target = (req: Request, session: Session) => {
   const base = `/remote/${req.params.id}`
   ;(req as any).base = base // Used to rewrite redirects.
   const url = req.originalUrl.slice(req.originalUrl.indexOf(base) + base.length)
-  return `http://127.0.0.1:${session.port}${url || "/"}`
+  return { socketPath: session.socket, host: "localhost", port: 0, path: url || "/" }
 }
 
 export async function proxy(req: Request, res: Response): Promise<void> {
@@ -796,6 +895,8 @@ interface Shell {
   name: string
   folder?: string
   started: number
+  /** Last command run, as the browser saw it echoed; tells shells on one server apart. */
+  lastCommand?: string
   pty: Pty
   screen: { write(data: string, cb: () => void): void; resize(cols: number, rows: number): void; dispose(): void }
   serialize: () => string
@@ -868,6 +969,10 @@ export async function wsShell(req: WebsocketRequest): Promise<void> {
       try {
         const msg = JSON.parse(raw.toString())
         if (started) {
+          if (typeof msg.cmd === "string") {
+            if (shell) shell.lastCommand = msg.cmd.slice(0, 200)
+            return
+          }
           // Input sent before the shell is attached is dropped.
           return typeof msg.d === "string" ? shell?.pty.write(msg.d) : shell && resizeShell(shell, msg.cols, msg.rows)
         }
@@ -912,6 +1017,7 @@ router.get("/remote-shells", ensureAuthenticated, (_req, res) => {
       name: s.name,
       folder: s.folder,
       started: s.started,
+      lastCommand: s.lastCommand,
       clients: s.clients.size,
     })),
   )

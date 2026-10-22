@@ -74,6 +74,8 @@ export const replaceTemplates = <T extends object>(
     .replace(/{{CS_STATIC_BASE}}/g, serverOptions.csStaticBase)
     // Source builds (test instance) get the dev logo.
     .replace(/{{LOGO}}/g, isDevMode ? "code-server-remote-dev" : "code-server-remote")
+    // v{YYYY}.{MM}.{idx}; package.json drops the month's leading zero, which semver forbids.
+    .replace(/{{VERSION}}/g, "v" + codeServerVersion.replace(/^(\d+)\.(\d)\./, "$1.0$2."))
     .replace("{{OPTIONS}}", () => escapeJSON(serverOptions))
 }
 
@@ -322,6 +324,8 @@ export const getCookieOptions = (req: express.Request): express.CookieOptions =>
   return {
     domain: getCookieDomain(url.host, req.args["proxy-domain"]),
     path: normalize(url.pathname) || "/",
+    // The value is the hashed password; page scripts never need it.
+    httpOnly: true,
     sameSite: "lax",
   }
 }
