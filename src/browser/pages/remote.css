@@ -1240,7 +1240,20 @@ body:has(> .shell:not([hidden])) > :not(.shell, dialog, .toast) {
   z-index: 5;
 }
 
+/* Hangul syllable being typed on the on-screen keyboard, at the cursor until it's sent. */
+.term .preedit {
+  background: #181818;
+  color: #ffffff;
+  font-family: Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  pointer-events: none;
+  position: absolute;
+  text-decoration: underline;
+  white-space: pre;
+  z-index: 6;
+}
+
 .term .ghost[hidden],
+.term .preedit[hidden],
 .suggest[hidden] {
   display: none;
 }
@@ -2070,4 +2083,11 @@ audio.files-media {
   .picker-mode span {
     display: none;
   }
+}
+
+.type-text {
+  font-family: inherit;
+  min-height: 6em;
+  resize: vertical;
+  width: 100%;
 }

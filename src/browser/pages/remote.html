@@ -15,7 +15,7 @@
     <link rel="manifest" href="{{BASE}}/manifest.json" crossorigin="use-credentials" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
-    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=31" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=32" rel="stylesheet" />
     <!-- Shipped with VS Code; used by the SSH shell. -->
     <link href="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/css/xterm.css" rel="stylesheet" />
     <script defer src="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -236,7 +236,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" /></svg>
         </button>
       </div>
-      <div id="term" class="term"><span id="ghost" class="ghost" hidden></span></div>
+      <div id="term" class="term">
+        <span id="ghost" class="ghost" hidden></span><span id="preedit" class="preedit" hidden></span>
+      </div>
       <!-- Command suggestions from this server's history; tap to complete, or press →. -->
       <div id="suggest" class="keys suggest" role="toolbar" aria-label="Suggestions" hidden></div>
       <!-- Long-press menu of key combos. -->
@@ -254,6 +256,20 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
             <path d="M9 4H6a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-3" />
             <rect x="9" y="2" width="6" height="4" rx="1" />
+          </svg>
+        </button>
+        <!-- Types with the OS keyboard in a text box, for its IME, autocorrect and dictation. -->
+        <button type="button" tabindex="-1" id="type" aria-label="Type text" title="Type text">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
           </svg>
         </button>
         <button type="button" tabindex="-1" data-key="esc">Esc</button>
@@ -441,6 +457,23 @@
         <div class="actions">
           <button type="button" class="btn ghost" data-close>Cancel</button>
           <button type="submit" class="btn">Connect</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Text typed with the OS keyboard, pasted into the shell. -->
+    <dialog id="type-dialog" class="card sheet">
+      <form method="dialog">
+        <div class="sheet-head">
+          <h2>Type text</h2>
+        </div>
+        <div class="sheet-body">
+          <textarea id="type-text" class="field type-text" rows="4" aria-label="Text"></textarea>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn ghost" value="">Cancel</button>
+          <button type="submit" class="btn ghost" value="insert">Insert</button>
+          <button type="submit" class="btn" value="send">Send</button>
         </div>
       </form>
     </dialog>
@@ -1287,28 +1320,26 @@
         c && v
           ? String.fromCharCode(0xac00 + (CHO.indexOf(c) * 21 + JUNG.indexOf(v)) * 28 + JONG.indexOf(f || " "))
           : c || v
-      // Returns the new syllable and what to send for it.
+      // Returns the new syllable and what it finishes, to send. The syllable being typed is
+      // only shown (preedit), never sent and rewritten with backspaces: TUIs like Claude Code
+      // read a backspace and a syllable arriving together as garbled input.
       const hangul = (s, j) => {
-        const edit = (next) => [next, (syllable(s) ? "\x7f" : "") + syllable(next)]
         if (!JUNG.includes(j)) {
-          if (s.c && s.v && !s.f && JONG.includes(j)) return edit({ ...s, f: j })
-          if (s.f && MIX[s.f + j] && JONG.includes(MIX[s.f + j])) return edit({ ...s, f: MIX[s.f + j] })
-          return [{ c: j, v: "", f: "" }, j]
+          if (s.c && s.v && !s.f && JONG.includes(j)) return [{ ...s, f: j }, ""]
+          if (s.f && MIX[s.f + j] && JONG.includes(MIX[s.f + j])) return [{ ...s, f: MIX[s.f + j] }, ""]
+          return [{ c: j, v: "", f: "" }, syllable(s)]
         }
-        if (s.c && !s.v) return edit({ ...s, v: j })
-        if (s.v && !s.f && MIX[s.v + j]) return edit({ ...s, v: MIX[s.v + j] })
+        if (s.c && !s.v) return [{ ...s, v: j }, ""]
+        if (s.v && !s.f && MIX[s.v + j]) return [{ ...s, v: MIX[s.v + j] }, ""]
         if (s.f) {
           // The final moves to the next syllable: 갑 + ㅏ → 가바, 값 + ㅏ → 갑사.
           const [keep, move] = SPLIT[s.f] ? [...SPLIT[s.f]] : ["", s.f]
-          const next = { c: move, v: j, f: "" }
-          return [next, "\x7f" + syllable({ ...s, f: keep }) + syllable(next)]
+          return [{ c: move, v: j, f: "" }, syllable({ ...s, f: keep })]
         }
-        return [{ c: "", v: j, f: "" }, j]
+        return [{ c: "", v: j, f: "" }, syllable(s)]
       }
-      const hangulBack = (s) => {
-        const next = s.f ? { ...s, f: SPLIT[s.f]?.[0] || "" } : s.v ? { ...s, v: SPLIT[s.v]?.[0] || "" } : NO_HANGUL
-        return [next, "\x7f" + syllable(next)]
-      }
+      const hangulBack = (s) =>
+        s.f ? { ...s, f: SPLIT[s.f]?.[0] || "" } : s.v ? { ...s, v: SPLIT[s.v]?.[0] || "" } : NO_HANGUL
 
       const COMBOS = {
         ctrl: [..."CDZLRAEUKW"].map((c) => [`Ctrl+${c}`, ctrlKey(c)]),
@@ -1337,31 +1368,61 @@
         // Sticky Ctrl/Alt from the key bar apply to the next key, typed or tapped.
         const keys = $("keys")
         const mods = { ctrl: false, alt: false }
-        // Hangul syllable being typed on the on-screen keyboard; other input ends it.
+        // Hangul syllable being typed on the on-screen keyboard; other input sends it first.
         let composing = NO_HANGUL
+        const compose = (next) => {
+          composing = next
+          target.preedit(syllable(next))
+        }
+        const flush = () => {
+          const done = syllable(composing)
+          compose(NO_HANGUL)
+          if (done) target.deliver(done)
+          return done
+        }
         const setMod = (mod, on) => {
           mods[mod] = on
           keys.querySelector(`[data-mod="${mod}"]`).setAttribute("aria-pressed", on)
         }
         setMod("ctrl", false)
         setMod("alt", false)
-        const input = (d, compose) => {
-          if (!compose) composing = NO_HANGUL
+        const input = (d) => {
           // Focus reports (apps like Claude Code ask for them) aren't key presses.
           if (d === "\x1b[I" || d === "\x1b[O") return target.raw(d)
+          const flushed = flush()
           if ((mods.ctrl || mods.alt) && KO.includes(d)) d = EN[KO.indexOf(d)]
           const c = d.length === 1 ? d.toUpperCase().charCodeAt(0) : 0
           if (mods.ctrl && c >= 64 && c < 96) d = String.fromCharCode(c & 31)
           if (mods.alt) d = "\x1b" + d
           setMod("ctrl", false)
           setMod("alt", false)
-          target.deliver(d)
+          // Apart from the syllable it ended, or apps like Claude Code read "다\r" as pasted text, not Enter.
+          // ponytail: a key tapped within 50ms could overtake it; a send queue if that shows up.
+          if (flushed) setTimeout(() => target.deliver(d), 50)
+          else target.deliver(d)
         }
         // The clipboard API needs HTTPS (and may be refused); else the OS paste goes into a prompt.
         const paste = async () => {
           const text = await navigator.clipboard?.readText().catch(() => undefined)
           const pasted = text ?? prompt("Paste here")
+          flush()
           if (pasted) target.paste(pasted)
+        }
+        // The OS keyboard in a text box (its IME, autocorrect, dictation), then pasted in one go.
+        const typeText = () => {
+          flush()
+          const d = $("type-dialog")
+          const t = $("type-text")
+          d.returnValue = ""
+          d.onclose = () => {
+            if (!d.returnValue || !t.value) return
+            target.paste(t.value)
+            // Enter on its own, after the paste has ended.
+            if (d.returnValue === "send") setTimeout(() => target.raw("\r"), 50)
+            t.value = ""
+          }
+          d.showModal()
+          t.focus()
         }
         // Don't take focus from the terminal, or the soft keyboard closes.
         const combos = $("combos")
@@ -1385,6 +1446,7 @@
                 c.tabIndex = -1
                 c.onclick = () => {
                   combos.hidden = true
+                  flush()
                   target.raw(seq)
                 }
                 return c
@@ -1401,6 +1463,7 @@
           if (!b || longPressed) return
           if (b.id === "kbd-toggle") return setKbd(kbd.hidden)
           if (b.id === "paste") return paste()
+          if (b.id === "type") return typeText()
           combos.hidden = true
           if (b.dataset.mod) setMod(b.dataset.mod, !mods[b.dataset.mod])
           else input(keySeq(b.dataset.key, target.appCursor()))
@@ -1450,17 +1513,17 @@
             else {
               if (k === "lang") letters = layer === "ko" ? "abc" : "ko"
               layer = k === "?123" ? "sym" : letters
-              composing = NO_HANGUL
+              flush()
             }
             return drawKbd()
           }
-          // Each jamo rewrites the syllable on screen: backspace, then the new syllable.
           const jamo = layer === "ko" && k.length === 1 && !mods.ctrl && !mods.alt
-          if (jamo || (k === "bksp" && syllable(composing))) {
-            const [next, out] = jamo ? hangul(composing, shifted(k)) : hangulBack(composing)
-            input(out, true)
-            composing = next
-          } else input({ bksp: "\x7f", space: " ", enter: "\r" }[k] ?? shifted(k))
+          if (jamo) {
+            const [next, done] = hangul(composing, shifted(k))
+            if (done) target.deliver(done)
+            compose(next)
+          } else if (k === "bksp" && syllable(composing)) compose(hangulBack(composing))
+          else input({ bksp: "\x7f", space: " ", enter: "\r" }[k] ?? shifted(k))
           if (shift === SHIFT_ONCE && k.length === 1) {
             shift = SHIFT_OFF
             drawKbd()
@@ -1469,6 +1532,7 @@
         drawKbd()
         // Shown by default on touch screens, hidden on PCs. The choice sticks, also across shells.
         const setKbd = (on) => {
+          if (!on) flush()
           kbd.hidden = !on
           $("kbd-toggle").setAttribute("aria-pressed", on)
           storage("kbd", on ? "1" : "0")
@@ -1506,6 +1570,11 @@
         return input
       }
 
+      // Opened from the terminal, after asking: a tap that meant to focus shouldn't leave the page.
+      const openLink = async (uri) => {
+        if (await ask("Open link?", uri, "Open")) window.open(uri, "_blank", "noopener")
+      }
+
       let closeShell = () => {}
       // Opens a new shell, or reattaches to a running one when id is given.
       const shell = (s, creds = {}, folder, id) => {
@@ -1520,6 +1589,8 @@
           fontFamily: 'Menlo, Consolas, "DejaVu Sans Mono", monospace',
           fontSize: +storage("font-size") || 14,
           lineHeight: 1.2,
+          // OSC 8 hyperlinks, without xterm's own confirm().
+          linkHandler: { activate: (e, uri) => openLink(uri) },
           // VS Code Dark Modern terminal colors.
           theme: {
             background: "#181818",
@@ -1545,6 +1616,60 @@
           },
         })
         term.open(box)
+        // URLs in the text: rows join when wrapped, or when full to the edge and going on
+        // (apps like Claude Code break long lines themselves). Cells as [x, y], 0-based.
+        const URL_RE = /https?:\/\/[^\s<>"'`]+[^\s<>"'`.,;:!?)\]}]/g
+        const urlsAt = (y) => {
+          const b = term.buffer.active
+          const joined = (i) => {
+            const l = b.getLine(i)
+            const prev = b.getLine(i - 1)
+            return l && prev && (l.isWrapped || (prev.getCell(term.cols - 1)?.getChars() && l.getCell(0)?.getChars()))
+          }
+          // ponytail: 20 rows each way, enough for login URLs on a phone; full-width boxes would join forever.
+          let top = y
+          while (top > Math.max(0, y - 20) && joined(top)) top--
+          let text = ""
+          const cells = []
+          for (let i = top; i < y + 20 && b.getLine(i) && (i === top || joined(i)); i++) {
+            const l = b.getLine(i)
+            for (let x = 0; x < term.cols; x++) {
+              const c = l.getCell(x)
+              // Wide characters take two cells, the second one empty.
+              if (!c?.getWidth()) continue
+              const ch = c.getChars() || " "
+              text += ch
+              for (const _ of ch.split("")) cells.push([x, i])
+            }
+          }
+          return [...text.matchAll(URL_RE)].map((m) => ({
+            url: m[0],
+            from: cells[m.index],
+            to: cells[m.index + m[0].length - 1],
+          }))
+        }
+        term.registerLinkProvider({
+          provideLinks: (y, done) =>
+            done(
+              urlsAt(y - 1)
+                .filter((u) => u.from[1] <= y - 1 && u.to[1] >= y - 1)
+                .map((u) => ({
+                  text: u.url,
+                  range: { start: { x: u.from[0] + 1, y: u.from[1] + 1 }, end: { x: u.to[0] + 1, y: u.to[1] + 1 } },
+                  activate: () => openLink(u.url),
+                })),
+            ),
+        })
+        // A tap has no hover, so xterm never sees the link; find it under the finger.
+        const tapLink = (t) => {
+          const r = term.element.querySelector(".xterm-screen").getBoundingClientRect()
+          const x = Math.floor(((t.clientX - r.left) / r.width) * term.cols)
+          const y = Math.floor(((t.clientY - r.top) / r.height) * term.rows) + term.buffer.active.viewportY
+          const at = (p) => p[1] * term.cols + p[0]
+          const u = urlsAt(y).find((u) => at(u.from) <= at([x, y]) && at([x, y]) <= at(u.to))
+          if (u) openLink(u.url)
+          return !!u
+        }
         const url = new URL(`${base}/remote-shell/${s.id}`, location.href)
         url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
         const attach = !!id
@@ -1668,6 +1793,22 @@
           },
           raw: (d) => send({ d }),
           appCursor: () => term.modes.applicationCursorKeysMode,
+          preedit: (text) => {
+            const preedit = $("preedit")
+            const cell = term._core._renderService.dimensions.css.cell
+            preedit.hidden = !text || !cell.width
+            if (preedit.hidden) return
+            const b = term.buffer.active
+            const screen = box.querySelector(".xterm-screen").getBoundingClientRect()
+            const origin = box.getBoundingClientRect()
+            Object.assign(preedit.style, {
+              left: screen.left - origin.left + b.cursorX * cell.width + "px",
+              top: screen.top - origin.top + b.cursorY * cell.height + "px",
+              lineHeight: cell.height + "px",
+              fontSize: term.options.fontSize + "px",
+            })
+            preedit.textContent = text
+          },
           paste: (text) => {
             // xterm wraps it for bracketed paste mode and sends it through input().
             term.paste(text)
@@ -1708,7 +1849,7 @@
           combos.hidden = true
           const t = e.changedTouches[0]
           if (!touchStart || Math.hypot(t.clientX - touchStart.clientX, t.clientY - touchStart.clientY) > 10) return
-          term.focus()
+          if (!tapLink(t)) term.focus()
         }
         const open = (attach) => {
           clearTimeout(retry)
@@ -1779,7 +1920,7 @@
           clearTimeout(retry)
           ws.close()
           term.dispose()
-          ghost.hidden = suggest.hidden = true
+          ghost.hidden = suggest.hidden = $("preedit").hidden = true
           $("shell").hidden = true
           document.title = prevTitle
           loadShells()
@@ -2422,6 +2563,7 @@
         raw: (d) => typingShell()?.raw(d),
         appCursor: () => typingShell()?.appCursor() ?? false,
         paste: (text) => typingShell()?.paste(text),
+        preedit: (text) => typingShell()?.preedit(text),
       }
       // Panes call this when a shell opens or is touched (f), or closes (no f).
       window.paneShell = (f) => {
