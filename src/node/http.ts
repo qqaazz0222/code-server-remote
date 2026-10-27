@@ -72,10 +72,13 @@ export const replaceTemplates = <T extends object>(
     .replace(/{{TO}}/g, (typeof req.query.to === "string" && escapeHtml(req.query.to)) || "/")
     .replace(/{{BASE}}/g, serverOptions.base)
     .replace(/{{CS_STATIC_BASE}}/g, serverOptions.csStaticBase)
-    // Source builds (test instance) get the dev logo.
+    // Source builds (test instance) get the dev logo and a -dev version suffix.
     .replace(/{{LOGO}}/g, isDevMode ? "code-server-remote-dev" : "code-server-remote")
     // v{YYYY}.{MM}.{idx}; package.json drops the month's leading zero, which semver forbids.
-    .replace(/{{VERSION}}/g, "v" + codeServerVersion.replace(/^(\d+)\.(\d)\./, "$1.0$2."))
+    .replace(
+      /{{VERSION}}/g,
+      "v" + codeServerVersion.replace(/^(\d+)\.(\d)\./, "$1.0$2.") + (isDevMode ? "-dev" : ""),
+    )
     .replace("{{OPTIONS}}", () => escapeJSON(serverOptions))
 }
 

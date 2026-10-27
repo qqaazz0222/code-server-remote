@@ -62,9 +62,11 @@ const sessions = new Map<string, Session>()
 
 process.on("exit", () => sessions.forEach((s) => s.proc.kill()))
 
-const storePath = (req: Request) => path.join(req.args["user-data-dir"], "remote-servers.json")
+type Args = Pick<Request, "args">
 
-async function readServers(req: Request): Promise<RemoteServer[]> {
+const storePath = (req: Args) => path.join(req.args["user-data-dir"], "remote-servers.json")
+
+async function readServers(req: Args): Promise<RemoteServer[]> {
   try {
     const servers: RemoteServer[] = JSON.parse(await fs.readFile(storePath(req), "utf8"))
     return servers.some((s) => s.id === DEFAULT_SERVER.id) ? servers : [DEFAULT_SERVER, ...servers]
@@ -249,6 +251,78 @@ async function status(server: RemoteServer): Promise<{ online: boolean | null; m
   return { online: ms !== undefined, ms }
 }
 
+/**
+ * Uptime: each server's SSH port is checked in the background and counted per
+ * hour, so time without checks (code-server down) and jump hosts stay unknown
+ * instead of counting as down.
+ */
+const UPTIME_INTERVAL_MS = 60 * 1000
+const HOUR_MS = 60 * 60 * 1000
+const UPTIME_HOURS = 30 * 24
+/** Server id → hour start (ms) → [checks online, checks, summed response ms of online checks]. */
+let uptime: Record<string, Record<string, number[]>> = {}
+
+const uptimePath = (req: Args) => path.join(req.args["user-data-dir"], "remote-uptime.json")
+
+async function recordUptime(req: Args): Promise<void> {
+  const servers = await readServers(req)
+  const results = await Promise.all(servers.map(status))
+  const hour = Math.floor(Date.now() / HOUR_MS) * HOUR_MS
+  const cutoff = hour - UPTIME_HOURS * HOUR_MS
+  // Rebuilt from the current list, which also drops deleted servers.
+  uptime = Object.fromEntries(
+    servers.map((s, i) => {
+      const hours = Object.fromEntries(Object.entries(uptime[s.id] || {}).filter(([h]) => +h > cutoff))
+      if (results[i].online !== null) {
+        const b = (hours[hour] ||= [0, 0, 0])
+        b[0] += results[i].online ? 1 : 0
+        b[1]++
+        b[2] = (b[2] || 0) + (results[i].ms || 0)
+      }
+      return [s.id, hours]
+    }),
+  )
+  // ponytail: rewrites the whole file each round; ~20 KB per server at 30 days.
+  await fs.writeFile(uptimePath(req), JSON.stringify(uptime))
+}
+
+/** Start background checks; the log survives restarts. */
+export async function startUptime(req: Args): Promise<void> {
+  try {
+    uptime = JSON.parse(await fs.readFile(uptimePath(req), "utf8"))
+  } catch (error: any) {
+    if (error.code !== "ENOENT") logger.warn(`Uptime log unreadable, starting over: ${error.message}`)
+  }
+  const round = () => recordUptime(req).catch((error) => logger.warn(`Uptime check failed: ${error.message}`))
+  setInterval(round, UPTIME_INTERVAL_MS).unref()
+  await round()
+}
+
+/** Share of online checks over the last 24 hours and 30 days (null without checks), and per hour for 24 hours. */
+export function uptimeSummary(id: string, now = Date.now()) {
+  const hours = uptime[id] || {}
+  const hour = Math.floor(now / HOUR_MS) * HOUR_MS
+  const ratio = (n: number) => {
+    let up = 0
+    let total = 0
+    for (const [h, [u, t]] of Object.entries(hours)) {
+      if (+h > hour - n * HOUR_MS) {
+        up += u
+        total += t
+      }
+    }
+    return total ? up / total : null
+  }
+  return {
+    day: ratio(24),
+    month: ratio(UPTIME_HOURS),
+    hours: Array.from({ length: 24 }, (_, i) => {
+      const b = hours[hour - (23 - i) * HOUR_MS]
+      return b ? b[0] / b[1] : null
+    }),
+  }
+}
+
 /** Quote a remote path for sh; a leading ~ stays outside the quotes so it expands. */
 export function quotePath(p: string): string {
   const [, home, rest] = /^(~(?:\/|$))?([\s\S]*)$/.exec(p)!
@@ -399,7 +473,12 @@ router.get("/remote-servers", async (req, res) => {
 router.get("/remote-servers/status", async (req, res) => {
   const servers = await readServers(req)
   const results = await Promise.all(servers.map(status))
-  res.json(Object.fromEntries(servers.map((s, i) => [s.id, results[i]])))
+  res.json(Object.fromEntries(servers.map((s, i) => [s.id, { ...results[i], uptime: uptimeSummary(s.id) }])))
+})
+
+// Raw hourly log for the uptime details; the page groups it by its own days.
+router.get("/remote-servers/:id/uptime", (req, res) => {
+  res.json(Object.prototype.hasOwnProperty.call(uptime, req.params.id) ? uptime[req.params.id] : {})
 })
 
 router.post("/remote-servers", async (req, res) => {

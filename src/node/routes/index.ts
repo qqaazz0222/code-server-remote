@@ -179,6 +179,7 @@ export const register = async (
 
   // Server list at the root; the local editor stays at /vscode.
   app.router.use("/", remote.router)
+  remote.startUptime({ args })
 
   // For historic reasons we also load at /vscode because the root was replaced
   // by a plugin in v1 of Coder.  The plugin system (which was for internal use

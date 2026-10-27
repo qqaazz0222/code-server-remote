@@ -14,7 +14,9 @@ import {
   removeCommand,
   shellCommand,
   sizeCommand,
+  startUptime,
   unpackCommand,
+  uptimeSummary,
   writeCommand,
 } from "../../../../src/node/routes/remote"
 import * as httpserver from "../../../utils/httpserver"
@@ -49,6 +51,38 @@ describe("remote servers", () => {
     expect(() => parseEntries({ entries: [{ name: "a", path: "/a\nrm -rf ~" }] })).toThrow("Invalid entry point")
   })
 
+  it("should log uptime per hour", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "uptime-"))
+    const listener = net.createServer().listen(0, "127.0.0.1")
+    await new Promise((r) => listener.once("listening", r))
+    const closed = net.createServer().listen(0, "127.0.0.1")
+    await new Promise((r) => closed.once("listening", r))
+    const closedPort = (closed.address() as net.AddressInfo).port
+    await new Promise((r) => closed.close(r))
+    const servers = [
+      { id: "up", name: "up", host: "127.0.0.1", port: (listener.address() as net.AddressInfo).port },
+      { id: "down", name: "down", host: "127.0.0.1", port: closedPort },
+    ]
+    fs.writeFileSync(path.join(dir, "remote-servers.json"), JSON.stringify(servers))
+    const args = { args: { "user-data-dir": dir } } as any
+    await startUptime(args)
+    listener.close()
+    expect(uptimeSummary("up")).toMatchObject({ day: 1, month: 1 })
+    expect(uptimeSummary("down").day).toBe(0)
+    expect(
+      uptimeSummary("up")
+        .hours.slice(0, 23)
+        .every((h) => h === null),
+    ).toBe(true)
+    // An hour later the bar moves left; unknown servers have no data.
+    expect(uptimeSummary("up", Date.now() + 60 * 60 * 1000).hours[22]).toBe(1)
+    expect(uptimeSummary("nope").month).toBeNull()
+    // Kept across restarts, with the response time of online checks.
+    const log = JSON.parse(fs.readFileSync(path.join(dir, "remote-uptime.json"), "utf8"))
+    expect(Object.values(log.up)[0]).toEqual([1, 1, expect.any(Number)])
+    expect(Object.values(log.down)[0]).toEqual([0, 1, 0])
+  })
+
   it("should quote the shell folder", () => {
     expect(shellCommand()).toBeUndefined()
     const folder = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "shell-")), "it's $(x)")
@@ -76,7 +110,8 @@ describe("remote servers", () => {
     fs.writeFileSync(path.join(dir, "a\tb.txt"), "hello")
     fs.writeFileSync(path.join(dir, ".hidden"), "")
     fs.symlinkSync("sub", path.join(dir, "link"))
-    const sh = (cmd: string) => execFileSync("sh", ["-c", cmd], { encoding: "utf8", env: { ...process.env, HOME: home } })
+    const sh = (cmd: string) =>
+      execFileSync("sh", ["-c", cmd], { encoding: "utf8", env: { ...process.env, HOME: home } })
 
     const { path: cwd, entries } = parseListing(sh(listCommand("~/it's $(x)")))
     expect(cwd).toBe(fs.realpathSync(dir))
