@@ -15,7 +15,7 @@
     <link rel="manifest" href="{{BASE}}/manifest.json" crossorigin="use-credentials" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
-    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=32" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=33" rel="stylesheet" />
     <!-- Shipped with VS Code; used by the SSH shell. -->
     <link href="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/css/xterm.css" rel="stylesheet" />
     <script defer src="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -31,6 +31,17 @@
         <span class="short">CSR</span>
       </div>
       <span class="topbar-actions">
+        <button
+          type="button"
+          id="notifications-open"
+          class="icon-btn"
+          title="Task notifications"
+          aria-label="Task notifications"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+          </svg>
+        </button>
         <button type="button" id="split-open" class="icon-btn" title="Split view" aria-label="Split view">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="4" width="18" height="16" rx="2" />
@@ -170,6 +181,41 @@
 
     <div id="toast" class="toast" role="status" hidden></div>
 
+    <dialog id="notifications-dialog" class="card sheet" aria-labelledby="notifications-title">
+      <div class="sheet-head">
+        <h2 id="notifications-title">Task notifications</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">×</button>
+      </div>
+      <div class="sheet-body notification-settings">
+        <p>
+          Get an alert when Codex CLI or Claude Code finishes a response. Keep this launcher tab open, including when
+          using another tab or app.
+        </p>
+        <p id="notifications-status" role="status"></p>
+        <div class="notification-actions">
+          <button type="button" class="btn" id="notifications-enable">Enable notifications</button>
+          <button type="button" class="btn ghost" id="notifications-test">Test browser alert</button>
+        </div>
+        <p>
+          Run this command once on each computer where you use the CLIs, then restart them. Requires Python 3.11+ and
+          access to this launcher's URL.
+        </p>
+        <textarea
+          id="notifications-command"
+          rows="5"
+          readonly
+          aria-label="Install completion hooks command"
+          spellcheck="false"
+        ></textarea>
+        <button type="button" class="btn ghost" id="notifications-copy">Copy setup command</button>
+        <p>
+          The command contains a private notification credential. Existing hooks are preserved and settings are backed
+          up. Prompts and response text are never sent.
+        </p>
+        <p>Closing this tab stops delivery. Browser and device settings may silence background alerts.</p>
+      </div>
+    </dialog>
+
     <dialog id="mode-dialog" class="card sheet">
       <div class="sheet-head">
         <h2 id="mode-title">Open</h2>
@@ -236,7 +282,7 @@
     <div id="shell" class="shell" hidden>
       <!-- Close sits top right in the shell, files and VS Code alike. -->
       <div class="shell-head">
-        <span id="shell-title" class="shell-title"></span>
+        <button type="button" id="shell-title" class="shell-title" aria-label="Edit shell session alias"></button>
         <button type="button" id="font-down" class="icon-btn" aria-label="Smaller text" title="Smaller text">A−</button>
         <button type="button" id="font-up" class="icon-btn" aria-label="Larger text" title="Larger text">A+</button>
         <button type="button" class="icon-btn split-here" aria-label="Split view" title="Split view">
@@ -546,6 +592,20 @@
       </form>
     </dialog>
 
+    <dialog id="alias-dialog" class="card sheet">
+      <form id="alias-form">
+        <div class="sheet-head"><h2>Shell session alias</h2></div>
+        <div class="sheet-body">
+          <label>Alias <input id="alias-input" class="field" maxlength="100" autocomplete="off" /></label>
+          <p>Leave empty to use the server name.</p>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn ghost" data-close>Cancel</button>
+          <button type="submit" id="alias-save" class="btn">Save</button>
+        </div>
+      </form>
+    </dialog>
+
     <!-- In place of the browser's confirm(); see ask(). -->
     <dialog id="ask-dialog" class="card sheet">
       <form method="dialog">
@@ -780,6 +840,145 @@
         const json = await res.json().catch(() => ({}))
         if (!res.ok) throw Object.assign(new Error(json.error || res.statusText), { status: res.status })
         return json
+      }
+
+      // Only the outer launcher receives alerts; split panes share its settings.
+      if (!pane && window.parent === window) {
+        const endpoint = new URL(base + "/agent-notifications", location.href).href
+        const preference = "csr-task-notifications:" + endpoint
+        const delivered = preference + ":delivered"
+        const enabled = () => localStorage.getItem(preference) === "on"
+        let cursor
+        let epoch
+        let polling = false
+        let connected = false
+        let registration
+        const supported = () => window.isSecureContext && "Notification" in window && "serviceWorker" in navigator
+        const updateNotificationStatus = () => {
+          const on = enabled()
+          $("notifications-enable").textContent = on ? "Disable notifications" : "Enable notifications"
+          $("notifications-open").setAttribute("aria-pressed", String(on))
+          $("notifications-status").textContent = !supported()
+            ? "Browser alerts require HTTPS (or localhost) and a browser with notification support."
+            : Notification.permission === "denied"
+              ? "Notifications are blocked. Allow them in your browser's site settings."
+              : on
+                ? connected
+                  ? "Notifications enabled · Connected"
+                  : "Notifications enabled · Connecting…"
+                : "Notifications disabled on this browser."
+        }
+        const worker = async () => {
+          if (!registration) {
+            await navigator.serviceWorker.register(base + "/_static/out/browser/serviceWorker.js", {
+              scope: new URL(base + "/", location.href).pathname,
+            })
+            registration = await navigator.serviceWorker.ready
+          }
+          return registration
+        }
+        const showAlert = async (title, body, tag) => {
+          const sw = await worker()
+          await sw.showNotification(title, { body, tag, data: { url: location.href } })
+        }
+        const deliver = async (event, sourceEpoch) => {
+          const send = async () => {
+            const last = JSON.parse(localStorage.getItem(delivered) || "null")
+            if (last?.epoch === sourceEpoch && last.id >= event.id) return
+            await showAlert(
+              event.tool === "codex" ? "Codex CLI · Response complete" : "Claude Code · Response complete",
+              [event.project, event.host].filter(Boolean).join(" · "),
+              `csr-${sourceEpoch}-${event.id}`,
+            )
+            localStorage.setItem(delivered, JSON.stringify({ epoch: sourceEpoch, id: event.id }))
+            toast(`${event.tool === "codex" ? "Codex CLI" : "Claude Code"} finished · ${event.project}`)
+          }
+          if (navigator.locks) {
+            await navigator.locks.request(preference, { ifAvailable: true }, async (lock) => {
+              if (lock) await send()
+            })
+          } else await send()
+        }
+        const poll = async () => {
+          if (polling || !enabled()) return
+          polling = true
+          try {
+            const query = cursor === undefined ? "" : `?epoch=${encodeURIComponent(epoch)}&after=${cursor}`
+            const result = await request("GET", endpoint + "/events" + query)
+            if (enabled() && Notification.permission === "granted") {
+              for (const event of result.events) await deliver(event, result.epoch)
+            }
+            cursor = result.cursor
+            epoch = result.epoch
+            connected = true
+          } catch {
+            connected = false
+          } finally {
+            polling = false
+            updateNotificationStatus()
+          }
+        }
+        $("notifications-open").onclick = async () => {
+          $("notifications-dialog").showModal()
+          updateNotificationStatus()
+          try {
+            const setup = await request("POST", endpoint + "/setup", {})
+            // Python fetches the installer before running it: a failed download cannot look like success.
+            const installURL = endpoint + "/install.py"
+            const python = `import urllib.request; exec(compile(urllib.request.urlopen(urllib.request.Request(${JSON.stringify(installURL)}, headers={"Authorization": "Bearer ${setup.token}"}), timeout=15).read(), "agent-notify-install.py", "exec"))`
+            const quote = (s) => "'" + s.replace(/'/g, "'\\''") + "'"
+            $("notifications-command").value = `python3 -c ${quote(python)} ${quote(endpoint)}`
+          } catch (error) {
+            toast(`Failed to load notification setup: ${error.message}`, true)
+          }
+        }
+        $("notifications-enable").onclick = async () => {
+          try {
+            if (enabled()) localStorage.removeItem(preference)
+            else {
+              if (!supported()) throw new Error("Use HTTPS and a browser with notification support")
+              if ((await Notification.requestPermission()) !== "granted")
+                throw new Error("Allow notifications in your browser's site settings")
+              await worker()
+              localStorage.setItem(preference, "on")
+              cursor = undefined
+              await poll()
+            }
+            updateNotificationStatus()
+          } catch (error) {
+            toast(error.message, true)
+          }
+        }
+        $("notifications-test").onclick = async () => {
+          try {
+            if (!supported() || Notification.permission !== "granted")
+              throw new Error("Enable browser notifications first")
+            await showAlert("Task notifications", "Browser notifications are working.", "csr-test")
+          } catch (error) {
+            toast(error.message, true)
+          }
+        }
+        $("notifications-copy").onclick = async () => {
+          try {
+            if (!$("notifications-command").value) throw new Error("Setup command is not available yet")
+            await navigator.clipboard.writeText($("notifications-command").value)
+            toast("Setup command copied")
+          } catch {
+            $("notifications-command").select()
+            toast("Select and copy the setup command")
+          }
+        }
+        updateNotificationStatus()
+        poll()
+        setInterval(poll, 3000)
+        window.addEventListener("online", poll)
+        window.addEventListener("storage", (event) => {
+          if (event.key !== preference) return
+          cursor = undefined
+          connected = false
+          updateNotificationStatus()
+          poll()
+        })
       }
 
       const el = (tag, cls, text) => {
@@ -1125,13 +1324,14 @@
               ),
             ),
             ...shells.map((sh) => {
-              const meta = `${sh.lastCommand ? "$ " + sh.lastCommand + " · " : ""}${sh.folder || "~"} · started ${ago(sh.started)}${sh.clients ? " · open elsewhere" : ""}`
+              const meta = `${sh.lastCommand ? "$ " + sh.lastCommand + " · " : ""}${sh.where ? "" : (sh.folder || "~") + " · "}started ${ago(sh.started)}${sh.clients ? " · open elsewhere" : ""}`
               const resume = () =>
                 shell(
                   servers.find((s) => s.id === sh.serverId) || { id: sh.serverId, name: sh.name },
                   {},
                   undefined,
                   sh.id,
+                  sh,
                 )
               const end = async () => {
                 if (
@@ -1150,7 +1350,15 @@
                 }
                 loadShells()
               }
-              return sessionRow("shell", sh.name, meta, `Resume shell on ${sh.name}`, resume, end, "End shell")
+              return sessionRow(
+                "shell",
+                sh.where ? `${sh.alias || sh.name} · ${sh.where}` : sh.alias || sh.name,
+                meta,
+                `Resume ${sh.alias || "shell"} on ${sh.name}`,
+                resume,
+                end,
+                "End shell",
+              )
             }),
           )
         } catch {
@@ -1568,6 +1776,25 @@
         // Sticky Ctrl/Alt from the key bar apply to the next key, typed or tapped.
         const keys = $("keys")
         const mods = { ctrl: false, alt: false }
+        // Keep keys behind a committed syllable in order, including fast taps while
+        // the TUI needs a separate read for the following Enter or control key.
+        const pending = []
+        let deliveryTimer
+        const drain = () => {
+          while (!deliveryTimer && pending.length) {
+            const { data, separate } = pending.shift()
+            target.deliver(data)
+            if (separate)
+              deliveryTimer = setTimeout(() => {
+                deliveryTimer = undefined
+                drain()
+              }, 50)
+          }
+        }
+        const deliver = (data, separate = false) => {
+          pending.push({ data, separate })
+          drain()
+        }
         // Hangul syllable being typed on the on-screen keyboard; other input sends it first.
         let composing = NO_HANGUL
         const compose = (next) => {
@@ -1577,7 +1804,7 @@
         const flush = () => {
           const done = syllable(composing)
           compose(NO_HANGUL)
-          if (done) target.deliver(done)
+          if (done) deliver(done, true)
           return done
         }
         const setMod = (mod, on) => {
@@ -1589,17 +1816,14 @@
         const input = (d) => {
           // Focus reports (apps like Claude Code ask for them) aren't key presses.
           if (d === "\x1b[I" || d === "\x1b[O") return target.raw(d)
-          const flushed = flush()
+          flush()
           if ((mods.ctrl || mods.alt) && KO.includes(d)) d = EN[KO.indexOf(d)]
           const c = d.length === 1 ? d.toUpperCase().charCodeAt(0) : 0
           if (mods.ctrl && c >= 64 && c < 96) d = String.fromCharCode(c & 31)
           if (mods.alt) d = "\x1b" + d
           setMod("ctrl", false)
           setMod("alt", false)
-          // Apart from the syllable it ended, or apps like Claude Code read "다\r" as pasted text, not Enter.
-          // ponytail: a key tapped within 50ms could overtake it; a send queue if that shows up.
-          if (flushed) setTimeout(() => target.deliver(d), 50)
-          else target.deliver(d)
+          deliver(d)
         }
         // The clipboard API needs HTTPS (and may be refused); else the OS paste goes into a prompt.
         const paste = async () => {
@@ -1731,10 +1955,11 @@
             }
             return drawKbd()
           }
-          const jamo = layer === "ko" && k.length === 1 && !mods.ctrl && !mods.alt
+          const jamo =
+            layer === "ko" && k.length === 1 && (CHO.includes(k) || JUNG.includes(k)) && !mods.ctrl && !mods.alt
           if (jamo) {
             const [next, done] = hangul(composing, shifted(k))
-            if (done) target.deliver(done)
+            if (done) deliver(done)
             compose(next)
           } else if (k === "bksp" && syllable(composing)) compose(hangulBack(composing))
           else input({ bksp: "\x7f", space: " ", enter: "\r" }[k] ?? shifted(k))
@@ -1791,7 +2016,7 @@
 
       let closeShell = () => {}
       // Opens a new shell, or reattaches to a running one when id is given.
-      const shell = (s, creds = {}, folder, id) => {
+      const shell = (s, creds = {}, folder, id, snapshot = {}) => {
         closeShell()
         const prevTitle = document.title
         document.title = `${s.name} · Shell`
@@ -1830,6 +2055,31 @@
           },
         })
         term.open(box)
+        let alias = snapshot.alias || ""
+        let where = snapshot.where || ""
+        let renamed = false
+        const renderTitle = () => {
+          const name = alias || s.name
+          document.title = `${name} · Shell`
+          $("shell-title").textContent = where ? `${name} · ${where}` : name
+          $("shell-title").title = `${s.name}${where ? " · " + where : ""} · Edit session alias`
+        }
+        renderTitle()
+        // Top bar: session name plus the directory, from the shell's OSC 7 or, failing that, its window title
+        // (bash on Debian/Ubuntu sets "user@host: dir"). ponytail: shells that send neither show the name only.
+        const bar = (value) => {
+          where = value
+          renderTitle()
+          if (where) send({ where })
+        }
+        let cwd = ""
+        term.onTitleChange((t) => !cwd && bar(t))
+        term.parser.registerOscHandler(7, (data) => {
+          try {
+            bar((cwd = decodeURIComponent(new URL(data).pathname)))
+          } catch {}
+          return true
+        })
         // OSC 52 "copy to clipboard", which apps with their own selection (Claude Code, tmux, vim) send;
         // xterm ignores it without its clipboard addon. Reads ("?") are refused.
         // ponytail: needs a recent click or key (transient activation), true for a drag released just before.
@@ -1906,6 +2156,43 @@
         let closed = false
         let dropped = false
         let retry
+        const aliasDialog = $("alias-dialog")
+        $("shell-title").onclick = () => {
+          $("alias-input").value = alias
+          aliasDialog.showModal()
+          $("alias-input").focus()
+          $("alias-input").select()
+        }
+        aliasDialog.onclose = () => !closed && term.focus()
+        $("alias-form").onsubmit = async (e) => {
+          e.preventDefault()
+          $("alias-save").disabled = true
+          try {
+            const result = await request("PATCH", `${base}/remote-shells/${id}`, { alias: $("alias-input").value })
+            if (closed) return
+            alias = result.alias
+            renamed = true
+            renderTitle()
+            aliasDialog.close()
+            loadShells()
+          } catch (error) {
+            if (!closed) toast(`Failed to save alias: ${error.message}`, true)
+          } finally {
+            $("alias-save").disabled = false
+          }
+        }
+        // Also restore the name when opened directly from a URL or moved into a split pane.
+        if (attach) {
+          request("GET", `${base}/remote-shells`)
+            .then((shells) => {
+              const saved = shells.find((sh) => sh.id === id)
+              if (closed || renamed || !saved) return
+              alias = saved.alias || ""
+              where ||= saved.where || ""
+              renderTitle()
+            })
+            .catch(() => {})
+        }
         // Keys typed while (re)connecting wait for the shell instead of being dropped.
         const pending = []
         const send = (msg) => {
@@ -2152,6 +2439,9 @@
           window.removeEventListener("online", wake)
           // Detach only; the shell keeps running.
           closed = true
+          aliasDialog.close()
+          $("shell-title").onclick = null
+          $("alias-form").onsubmit = null
           clearTimeout(retry)
           ws.close()
           term.dispose()

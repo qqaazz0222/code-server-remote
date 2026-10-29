@@ -972,10 +972,13 @@ interface Shell {
   id: string
   serverId: string
   name: string
+  alias?: string
   folder?: string
   started: number
   /** Last command run, as the browser saw it echoed; tells shells on one server apart. */
   lastCommand?: string
+  /** Directory or window title the browser showed in the top bar. */
+  where?: string
   pty: Pty
   screen: { write(data: string, cb: () => void): void; resize(cols: number, rows: number): void; dispose(): void }
   serialize: () => string
@@ -1052,6 +1055,10 @@ export async function wsShell(req: WebsocketRequest): Promise<void> {
             if (shell) shell.lastCommand = msg.cmd.slice(0, 200)
             return
           }
+          if (typeof msg.where === "string") {
+            if (shell) shell.where = msg.where.slice(0, 200)
+            return
+          }
           // Input sent before the shell is attached is dropped.
           return typeof msg.d === "string" ? shell?.pty.write(msg.d) : shell && resizeShell(shell, msg.cols, msg.rows)
         }
@@ -1094,12 +1101,31 @@ router.get("/remote-shells", ensureAuthenticated, (_req, res) => {
       id: s.id,
       serverId: s.serverId,
       name: s.name,
+      alias: s.alias,
       folder: s.folder,
       started: s.started,
       lastCommand: s.lastCommand,
+      where: s.where,
       clients: s.clients.size,
     })),
   )
+})
+
+router.patch("/remote-shells/:id", ensureAuthenticated, (req, res) => {
+  const shell = shells.get(req.params.id as string)
+  if (!shell) {
+    return res.status(404).json({ error: "Shell ended" })
+  }
+  const alias = req.body?.alias
+  if (
+    typeof alias !== "string" ||
+    alias.trim().length > 100 ||
+    [...alias].some((char) => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)
+  ) {
+    return res.status(400).json({ error: "Alias must be a single line of up to 100 characters" })
+  }
+  shell.alias = alias.trim() || undefined
+  return res.json({ alias: shell.alias || "" })
 })
 
 router.delete("/remote-shells/:id", ensureAuthenticated, (req, res) => {

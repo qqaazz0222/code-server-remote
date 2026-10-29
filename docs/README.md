@@ -25,6 +25,9 @@ phone.
   `src/samples` has files to try the previews with.
 - **Quick Entry Points**: named folders per server, offered when opening it.
   `~` expands on the remote.
+- **Task notifications**: browser alerts when Codex CLI or Claude Code finishes
+  a response, including while viewing another tab. The alert identifies the
+  tool, project and host, and opens the launcher when clicked.
 - **Auth**: SSH keys (`identityFile`) or saved passwords (via `SSH_ASKPASS`,
   OpenSSH 8.4+). Username and password can also be typed per connection
   without saving. File browsing reuses one SSH ControlMaster for 15 minutes.
@@ -74,6 +77,46 @@ and a production launcher on one machine don't interfere.
 **Put the launcher behind code-server's password auth (the default) or another
 auth layer.** Anyone who can sign in can reach every registered server.
 
+### CLI completion notifications
+
+1. Open **Task notifications** (the bell in the launcher header), then enable
+   notifications and allow the browser permission. HTTPS or localhost is required.
+2. Copy the setup command and run it on each host where the CLIs run. Python
+   3.11+ is required, and the host must be able to reach the displayed launcher
+   URL. An additional proxy sign-in layer must allow the publisher endpoints
+   `/agent-notifications/install.py` and `/agent-notifications/complete` through
+   to code-server; those endpoints require their own bearer credential.
+3. Restart Codex CLI and Claude Code. Use **Test browser alert** to check browser
+   delivery; the installer also prints a command to test the whole connection.
+
+The installer updates user-level `$CODEX_HOME/config.toml` (default
+`~/.codex/config.toml`) and `$CLAUDE_CONFIG_DIR/settings.json` (default
+`~/.claude/settings.json`). It preserves existing hooks, chains any previous
+Codex `notify` command, and keeps original settings in adjacent
+`.before-agent-notifications` files. Re-running setup does not duplicate hooks.
+If Claude project or managed settings override user hooks, check `/hooks` in
+the CLI and allow the installed `Stop` hook.
+
+Only completion metadata is sent: the tool, project folder name and hostname.
+Prompts and response text are excluded. Notification failures do not fail the
+CLI task. Credentials are stored with mode `0600` in the launcher's
+`<user-data-dir>/agent-notifications-token` and the CLI host's
+`~/.local/share/code-server-remote/notifications/connection.json`. Keep the setup
+command private. To rotate the credential, stop the launcher, remove its token
+file, restart it and re-run setup on each CLI host.
+
+Keep a launcher tab open. Events are checked every three seconds and the latest
+100 are retained in memory to cover brief disconnects. New pages start from the
+current event, and launcher restarts clear the queue. Browser suspension, device
+sleep and Do Not Disturb may delay or silence alerts. This does not provide Web
+Push delivery after the launcher tabs close. Disabling notifications in the
+dialog affects all launcher tabs for this URL in that browser.
+
+To uninstall, remove the installed Claude `Stop` command and restore Codex's
+previous `notify` value (recorded in `connection.json` as `previous_notify`), then
+remove the CLI host's `notifications` directory. The original backup files can
+also restore settings if no later settings changes need to be kept.
+
 ## Tests
 
 ```bash
@@ -81,6 +124,8 @@ npm run test:unit
 ```
 
 Remote-specific tests are in `test/unit/node/routes/remote.test.ts`.
+Notification API and CLI installer tests are in
+`test/unit/node/routes/agentNotifications.test.ts`.
 
 ## Upstream
 

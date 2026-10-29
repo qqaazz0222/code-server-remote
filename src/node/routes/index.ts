@@ -16,6 +16,7 @@ import { CoderSettings, SettingsProvider } from "../settings"
 import { UpdateProvider } from "../update"
 import { getMediaMime, paths } from "../util"
 import type { WebsocketRequest } from "../wsRouter"
+import { agentNotifications } from "./agentNotifications"
 import * as domainProxy from "./domainProxy"
 import { errorHandler, wsErrorHandler } from "./errors"
 import * as health from "./health"
@@ -176,6 +177,7 @@ export const register = async (
   }
 
   app.router.use("/update", update.router)
+  app.router.use("/agent-notifications", agentNotifications())
 
   // Server list at the root; the local editor stays at /vscode.
   app.router.use("/", remote.router)
