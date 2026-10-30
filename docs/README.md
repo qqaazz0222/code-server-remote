@@ -17,7 +17,10 @@ phone.
   header; reloading reopens it.
 - **Shell**: `ssh` in a local pty streamed over a WebSocket, VS Code Dark Modern
   colors, and an on-screen keyboard (including Korean 2-set) shown by default
-  on touch devices.
+  on touch devices. Touch keys give short vibration feedback on supported
+  browsers; the phone icon beside the keyboard toggle turns it on or off and
+  remembers your choice. Shift also modifies the navigation bar: tap once for
+  the next key, twice to lock. Long-press an arrow for Shift/Ctrl combinations.
 - **Files**: browse from any folder with breadcrumbs and hidden-file toggle;
   preview text, images, PDF, audio and video; rendered/raw views for Markdown,
   HTML (sandboxed), JSON, YAML, CSV and TSV; upload (button or drag and drop),
@@ -28,6 +31,9 @@ phone.
 - **Task notifications**: browser alerts when Codex CLI or Claude Code finishes
   a response, including while viewing another tab. The alert identifies the
   tool, project and host, and opens the launcher when clicked.
+- **AI usage**: Claude Code and Codex limits left (5-hour, weekly) per
+  account in the top bar, read on This computer. See
+  [AI usage](#ai-usage).
 - **Auth**: SSH keys (`identityFile`) or saved passwords (via `SSH_ASKPASS`,
   OpenSSH 8.4+). Username and password can also be typed per connection
   without saving. File browsing reuses one SSH ControlMaster for 15 minutes.
@@ -50,6 +56,38 @@ node out/node/entry.js --bind-addr 0.0.0.0:8080
 For development, `npm run watch` instead. Source builds use the dev logo,
 release builds the regular one.
 
+### Preserve development sessions across launcher restarts
+
+After `npm run build`, start the launcher with `CSR_SESSION_BROKER=1` to keep
+remote editors, SSH connections and shell PTYs in a separate session broker.
+This mode requires an existing tmux server started outside the launcher service
+(for example, open a tmux session from your login shell first). Each user data
+directory gets its own broker in a
+`csr-sessions-<hash>` tmux session, listening on a private Unix socket under
+`<user-data-dir>/session-broker/`. Authentication and origin checks still run
+in the launcher before it forwards requests to that socket. Production keeps
+the existing behavior unless this environment variable is explicitly enabled.
+
+The broker survives launcher and systemd service restarts. Open WebSockets
+disconnect during restart; reconnect to the launcher to reattach to the same
+terminal, with its screen and running commands preserved. Sessions created
+before enabling this mode cannot be transferred into the broker. The local
+editor at `/vscode` remains owned by the launcher.
+
+The broker continues running its loaded code when the launcher is rebuilt.
+To update the broker itself, finish its sessions, then stop its tmux session
+and restart the launcher. Stopping the broker or rebooting the host ends its
+sessions. The launcher refuses to reuse an incompatible broker protocol rather
+than terminating existing sessions. Do not share a user data directory between
+development and production launchers.
+
+Run `npm run build && npm run test:session-broker` to exercise launcher shutdown
+and restart with real processes and PTYs and a local SSH test fixture. It checks
+continued execution during downtime, terminal PID, environment and screen
+recovery, retained editor connections, HTTP/WebSocket forwarding, authentication,
+origin checks, private socket permissions and explicit session termination.
+It runs both tmux-owned and externally managed worker modes.
+
 ### Docker
 
 The production image layers this fork's server and pages on the official
@@ -57,12 +95,30 @@ code-server release:
 
 ```bash
 npm run build
-tar -c ci/remote/Dockerfile out src/browser/pages src/images |
+tar -c ci/remote/Dockerfile package.json out src/browser/pages src/images |
   docker build -t code-server-remote -f ci/remote/Dockerfile -
 ```
 
 The base tag in `ci/remote/Dockerfile` must match the code-server version this
 fork is based on.
+
+For sessions that survive launcher container replacement, run the broker in a
+separate container, sharing the same user data mount, SSH keys, workspace mounts
+and network as the launcher. The launcher uses `CSR_SESSION_BROKER=1` and
+`CSR_SESSION_BROKER_EXTERNAL=1`; external mode waits for the companion and never
+starts an in-container tmux worker. The companion runs:
+
+```bash
+/usr/lib/code-server/lib/node /usr/lib/code-server/out/node/sessionBrokerWorker.js \
+  --user-data-dir /home/coder/.local/share/code-server
+```
+
+See [the Compose overlay](../ci/remote/compose.session-broker.yaml) for a complete
+example to merge into your deployment. Keep the broker image pinned and update
+only the launcher's image with `docker compose up -d --no-deps code-server`.
+Replacing the broker container, `docker compose down`, or rebooting the host
+ends its sessions. Updating a compatible launcher alone preserves them. The
+first transition from an older launcher ends sessions owned by that launcher.
 
 ## Configuration
 
@@ -116,6 +172,33 @@ To uninstall, remove the installed Claude `Stop` command and restore Codex's
 previous `notify` value (recorded in `connection.json` as `previous_notify`), then
 remove the CLI host's `notifications` directory. The original backup files can
 also restore settings if no later settings changes need to be kept.
+
+### AI usage
+
+The top bar shows the limits of each account listed under **AI usage** (click
+the bars). An account is a folder on This computer, read over its SSH login
+(save its password or key) at most once a minute:
+
+- **Codex**: its `CODEX_HOME` (default `~/.codex`). Session logs already record
+  the limits.
+- **Claude Code**: its `CLAUDE_CONFIG_DIR` (default `~/.claude`). Only the
+  status line receives the limits, so the status line command must save them;
+  add this after it reads its input into `INPUT`:
+
+  ```sh
+  USAGE_FILE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/usage.json"
+  jq -c '{rate_limits, at: (now | floor)}' <<< "$INPUT" > "$USAGE_FILE.tmp" && mv -f "$USAGE_FILE.tmp" "$USAGE_FILE"
+  ```
+
+  The file updates only while Claude Code runs; older than an hour, the bars dim.
+
+- **cswap** ([claude-swap](https://pypi.org/project/claude-swap/)): its
+  executable (e.g. `~/.local/bin/cswap`). `cswap list --json` lists every
+  Claude account it manages, each shown separately.
+
+The top bar shows each account's session (5-hour) window; the dialog shows all
+windows with their reset times. A window past its reset time shows 100% left. Accounts are kept in
+`<user-data-dir>/remote-usage.json`.
 
 ## Tests
 

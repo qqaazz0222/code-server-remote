@@ -9,6 +9,9 @@ import {
   parseEntries,
   parseListing,
   parseServer,
+  parseCswap,
+  parseUsage,
+  parseUsageAccounts,
   probe,
   readCommand,
   removeCommand,
@@ -17,8 +20,10 @@ import {
   startUptime,
   unpackCommand,
   uptimeSummary,
+  usageCommand,
   writeCommand,
 } from "../../../../src/node/routes/remote"
+import { brokerRoutes } from "../../../../src/node/sessionBroker"
 import * as httpserver from "../../../utils/httpserver"
 import * as integration from "../../../utils/integration"
 
@@ -127,6 +132,99 @@ describe("remote servers", () => {
     // Missing paths and folders exit 3, which the routes report as 404.
     expect(() => sh(listCommand("~/missing"))).toThrow(expect.objectContaining({ status: 3 }))
     expect(() => sh(readCommand(path.join(dir, "sub")))).toThrow(expect.objectContaining({ status: 3 }))
+  })
+
+  it("should read AI usage of each account", () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), "usage-"))
+    const now = Math.floor(Date.now() / 1000)
+    fs.mkdirSync(path.join(home, ".claude"))
+    fs.writeFileSync(
+      path.join(home, ".claude/usage.json"),
+      JSON.stringify({
+        rate_limits: {
+          five_hour: { used_percentage: 22, resets_at: now + 3600 },
+          seven_day: { used_percentage: 40, resets_at: now - 60 },
+        },
+        at: now,
+      }),
+    )
+    const day = path.join(home, "it's codex/sessions/2026/10/29")
+    fs.mkdirSync(day, { recursive: true })
+    const limits = (used: number) =>
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        payload: {
+          type: "token_count",
+          rate_limits: { primary: { used_percent: used, window_minutes: 10080, resets_at: now + 60 }, secondary: null },
+        },
+      })
+    fs.writeFileSync(
+      path.join(day, "rollout-1.jsonl"),
+      [limits(10), '{"rate_limits":null}', limits(16), "{}"].join("\n"),
+    )
+    const accounts = [
+      { id: "a", tool: "claude" as const, name: "Claude", dir: "~/.claude" },
+      { id: "b", tool: "codex" as const, name: "Codex", dir: "~/it's codex" },
+      { id: "c", tool: "claude" as const, name: "Missing", dir: "~/nowhere" },
+    ]
+    const out = execFileSync("sh", ["-c", usageCommand(accounts)], {
+      encoding: "utf8",
+      env: { ...process.env, HOME: home },
+    }).split("\0")
+
+    expect(parseUsage("claude", out[0])).toEqual({
+      windows: [
+        { label: "5h", used: 22, resetsAt: (now + 3600) * 1000 },
+        // Past its reset: nothing used since.
+        { label: "7d", used: 0, resetsAt: (now - 60) * 1000 },
+      ],
+      at: now * 1000,
+    })
+    // The last line with limits.
+    expect(parseUsage("codex", out[1])?.windows).toEqual([{ label: "7d", used: 16, resetsAt: (now + 60) * 1000 }])
+    expect(parseUsage("claude", out[2])).toBeUndefined()
+
+    expect(parseUsageAccounts([{ tool: "codex", name: " Work ", dir: "~/.codex-work" }])[0]).toMatchObject({
+      tool: "codex",
+      name: "Work",
+      dir: "~/.codex-work",
+      id: expect.stringMatching(/^[0-9a-f]{16}$/),
+    })
+    // Served by the launcher, not an older session broker.
+    expect(
+      ["/remote-servers/usage", "/remote-servers/usage/accounts", "/remote-servers/rebuild"].some((p) =>
+        brokerRoutes.test(p),
+      ),
+    ).toBe(false)
+    expect(brokerRoutes.test("/remote-servers/x/files")).toBe(true)
+    expect(() => parseUsageAccounts([{ tool: "gpt", name: "x", dir: "~" }])).toThrow()
+    expect(() => parseUsageAccounts([{ tool: "claude", name: "x", dir: "a\nb" }])).toThrow()
+
+    // cswap: one entry per account it manages, under the cswap entry's id.
+    const swap = { id: "s", tool: "cswap" as const, name: "Swap", dir: "~/.local/bin/cswap" }
+    const listed = JSON.stringify({
+      accounts: [
+        {
+          number: 1,
+          email: "a@x",
+          active: false,
+          usage: { fiveHour: { pct: 0 }, sevenDay: { pct: 30, resetsAt: "2026-11-06T07:00:00+00:00" } },
+          usageFetchedAt: "2026-10-30T09:37:16Z",
+        },
+        { number: 2, email: "b@x", alias: "work", active: true, usage: { fiveHour: { pct: 4 } } },
+      ],
+    })
+    const [one, two] = parseCswap(swap, listed, Date.parse("2026-10-30T10:00:00Z"))
+    expect(one).toMatchObject({ id: "s", name: "a@x", dir: "cswap #1", configured: swap })
+    expect(one.windows).toEqual([
+      { label: "5h", used: 0, resetsAt: undefined },
+      { label: "7d", used: 30, resetsAt: Date.parse("2026-11-06T07:00:00Z") },
+    ])
+    expect(one.at).toBe(Date.parse("2026-10-30T09:37:16Z"))
+    expect(two).toMatchObject({ name: "work", dir: "cswap #2 · active" })
+    // Unreadable: the entry stays, to be removable.
+    expect(parseCswap(swap, "")).toEqual([{ ...swap, windows: [] }])
+    expect(usageCommand([swap])).toBe(`{ "$HOME"/'.local/bin/cswap' list --json 2>/dev/null; }; printf '\\0'`)
   })
 
   it("should write and delete remote files", () => {

@@ -10,7 +10,7 @@ import * as path from "path"
 import { promisify } from "util"
 import Websocket from "ws"
 import { HttpCode, HttpError } from "../../common/http"
-import { rootPath, vsRootPath } from "../constants"
+import { isDevMode, rootPath, vsRootPath } from "../constants"
 import { authenticated, ensureAuthenticated, ensureOrigin, redirect, replaceTemplates } from "../http"
 import { proxy as _proxy } from "../proxy"
 import { wss, type WebsocketRequest } from "../wsRouter"
@@ -474,6 +474,244 @@ router.get("/remote-servers/status", async (req, res) => {
   const servers = await readServers(req)
   const results = await Promise.all(servers.map(status))
   res.json(Object.fromEntries(servers.map((s, i) => [s.id, { ...results[i], uptime: uptimeSummary(s.id) }])))
+})
+
+/**
+ * AI usage limits, read on This computer over ssh. Each account is a Claude
+ * Code config dir (the status line saves usage.json there, see docs), a
+ * Codex home (its session logs carry the rate limits) or a claude-swap
+ * (cswap) executable, which lists each of its Claude accounts.
+ */
+export interface UsageAccount {
+  id: string
+  tool: "claude" | "codex" | "cswap"
+  name: string
+  dir: string
+}
+
+export interface UsageWindow {
+  /** Window length, e.g. "5h" or "7d". */
+  label: string
+  /** Percent used. */
+  used: number
+  /** When it resets, in ms. */
+  resetsAt?: number
+}
+
+const DEFAULT_ACCOUNTS: UsageAccount[] = [
+  { id: "claude", tool: "claude", name: "Claude", dir: "~/.claude" },
+  { id: "codex", tool: "codex", name: "Codex", dir: "~/.codex" },
+]
+const USAGE_ACCOUNTS_MAX = 10
+const usagePath = (req: Args) => path.join(req.args["user-data-dir"], "remote-usage.json")
+
+async function readUsageAccounts(req: Args): Promise<UsageAccount[]> {
+  try {
+    return JSON.parse(await fs.readFile(usagePath(req), "utf8"))
+  } catch (error: any) {
+    if (error.code === "ENOENT") return DEFAULT_ACCOUNTS
+    throw error
+  }
+}
+
+/** Validate user input. The dir ends up in a remote command (quoted). */
+export function parseUsageAccounts(body: unknown): UsageAccount[] {
+  if (!Array.isArray(body) || body.length > USAGE_ACCOUNTS_MAX) {
+    throw new HttpError(`Expected up to ${USAGE_ACCOUNTS_MAX} accounts`, HttpCode.BadRequest)
+  }
+  return body.map((a: any) => {
+    const str = (v: unknown) => (typeof v === "string" ? v.trim() : "")
+    const [name, dir] = [str(a?.name), str(a?.dir)]
+    if (!["claude", "codex", "cswap"].includes(a?.tool)) throw new HttpError("Unknown tool", HttpCode.BadRequest)
+    if (!name || name.length > 40) throw new HttpError("Name must be 1-40 characters", HttpCode.BadRequest)
+    if (!dir || dir.length > 1024 || /[\0\n\r]/.test(dir)) throw new HttpError("Invalid folder", HttpCode.BadRequest)
+    const id = typeof a?.id === "string" && /^[\w-]{1,32}$/.test(a.id) ? a.id : crypto.randomBytes(8).toString("hex")
+    return { id, tool: a.tool, name, dir }
+  })
+}
+
+/**
+ * Remote command printing each account's latest record, each followed by a NUL:
+ * Claude's usage.json, or the last rate limits line of Codex's newest session log.
+ */
+export const usageCommand = (accounts: UsageAccount[]) =>
+  accounts
+    .map((a) =>
+      a.tool === "cswap"
+        ? `${quotePath(a.dir)} list --json 2>/dev/null`
+        : a.tool === "claude"
+          ? `cat ${quotePath(a.dir + "/usage.json")} 2>/dev/null`
+          : // ponytail: walks the last 8 days of session logs on every refresh; fine at a few hundred files.
+            `f=$(find ${quotePath(a.dir + "/sessions")} -name 'rollout-*.jsonl' -mtime -8 -printf '%T@ %p\\n' 2>/dev/null | sort -n | tail -1 | cut -d' ' -f2-); [ -n "$f" ] && grep '"rate_limits":{' "$f" | tail -1`,
+    )
+    .map((c) => `{ ${c}; }; printf '\\0'`)
+    .join("; ")
+
+/** "5h", "7d": a window's length in minutes, as people say it. */
+const windowLabel = (minutes: number) => (minutes % 1440 === 0 ? `${minutes / 1440}d` : `${Math.round(minutes / 60)}h`)
+
+/** One account's record; a window past its reset counts as unused. */
+export function parseUsage(
+  tool: "claude" | "codex",
+  text: string,
+  now = Date.now(),
+): { windows: UsageWindow[]; at?: number } | undefined {
+  let j: any
+  try {
+    j = JSON.parse(text)
+  } catch {
+    return undefined
+  }
+  const window = (label: string, used: unknown, resetsAt: unknown): UsageWindow | [] => {
+    if (typeof used !== "number") return []
+    const at = typeof resetsAt === "number" ? resetsAt * 1000 : undefined
+    return { label, used: at && at < now ? 0 : used, resetsAt: at }
+  }
+  if (tool === "claude") {
+    const rl = j?.rate_limits || {}
+    return {
+      windows: [
+        window("5h", rl.five_hour?.used_percentage, rl.five_hour?.resets_at),
+        window("7d", rl.seven_day?.used_percentage, rl.seven_day?.resets_at),
+      ].flat(),
+      at: typeof j?.at === "number" ? j.at * 1000 : undefined,
+    }
+  }
+  const rl = j?.payload?.rate_limits || {}
+  return {
+    windows: [rl.primary, rl.secondary]
+      .filter((w) => w && typeof w.window_minutes === "number")
+      .map((w) => window(windowLabel(w.window_minutes), w.used_percent, w.resets_at))
+      .flat(),
+    at: Date.parse(j?.timestamp) || undefined,
+  }
+}
+
+/**
+ * `cswap list --json`: one entry per Claude account it manages, keeping the
+ * cswap entry's id (removing it removes them all) and, as `configured`, the
+ * entry itself.
+ */
+export function parseCswap(a: UsageAccount, text: string, now = Date.now()) {
+  let j: any
+  try {
+    j = JSON.parse(text)
+  } catch {
+    return [{ ...a, windows: [] }]
+  }
+  const window = (label: string, w: any): UsageWindow | [] => {
+    if (typeof w?.pct !== "number") return []
+    const at = Date.parse(w.resetsAt) || undefined
+    return { label, used: at && at < now ? 0 : w.pct, resetsAt: at }
+  }
+  const accounts = Array.isArray(j?.accounts) ? j.accounts : []
+  if (!accounts.length) return [{ ...a, windows: [] }]
+  return accounts.map((c: any) => ({
+    ...a,
+    configured: a,
+    name: c.alias || c.email || `#${c.number}`,
+    dir: `cswap #${c.number}${c.active ? " · active" : ""}`,
+    windows: [window("5h", c.usage?.fiveHour), window("7d", c.usage?.sevenDay)].flat(),
+    at: Date.parse(c.usageFetchedAt) || undefined,
+  }))
+}
+
+// One ssh per minute at most, however many pages ask.
+const USAGE_TTL_MS = 60 * 1000
+let usageCache: { key: string; at: number; data: Promise<unknown> } | undefined
+
+async function readUsage(req: Request, accounts: UsageAccount[]) {
+  const server = await getServer(req, DEFAULT_SERVER.id)
+  const { args, env } = await sshCommand(req, server, ["-T"], usageCommand(accounts))
+  const out = await new Promise<string>((resolve, reject) => {
+    execFile("ssh", args, { env, timeout: 15000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+      // The last account's command may fail (no logs yet); only ssh itself failing (255) is an error.
+      if (error && ((error as any).code === 255 || error.killed)) {
+        reject(new HttpError(stderr.trim().split("\n").pop() || "ssh failed", HttpCode.ServerError))
+      } else resolve(stdout)
+    })
+  })
+  const records = out.split("\0")
+  return accounts.flatMap((a, i) => {
+    const text = records[i]?.trim() || ""
+    if (a.tool === "cswap") return parseCswap(a, text)
+    return { ...a, ...(parseUsage(a.tool, text) || { windows: [] }) }
+  })
+}
+
+router.get("/remote-servers/usage", async (req, res) => {
+  const accounts = await readUsageAccounts(req)
+  const key = JSON.stringify(accounts)
+  if (!usageCache || usageCache.key !== key || Date.now() - usageCache.at > USAGE_TTL_MS) {
+    usageCache = { key, at: Date.now(), data: readUsage(req, accounts) }
+    // A failure is not kept: the next request tries again.
+    usageCache.data.catch(() => (usageCache = undefined))
+  }
+  res.json(await usageCache.data)
+})
+
+router.get("/remote-servers/usage/accounts", async (req, res) => {
+  res.json(await readUsageAccounts(req))
+})
+
+router.put("/remote-servers/usage/accounts", async (req, res) => {
+  const accounts = parseUsageAccounts(req.body)
+  await fs.writeFile(usagePath(req), JSON.stringify(accounts, null, 2))
+  usageCache = undefined
+  res.json(accounts)
+})
+
+/**
+ * Development builds: rebuild and restart this launcher from the page. The
+ * build runs in a detached session of the user's own tmux server, outside this
+ * service, so restarting the service doesn't stop it; systemd (a user unit)
+ * restarts the launcher.
+ */
+const REBUILD_SESSION = "csr-rebuild"
+const REBUILD_FAILED = "REBUILD FAILED"
+const startedAt = Date.now()
+const rebuildLog = (req: Args) => path.join(req.args["user-data-dir"], "rebuild.log")
+const succeeds = (cmd: string, args: string[]) =>
+  promisify(execFile)(cmd, args).then(
+    () => true,
+    () => false,
+  )
+
+router.use("/remote-servers/rebuild", (_req, _res, next) => {
+  next(isDevMode ? undefined : new HttpError("Not found", HttpCode.NotFound))
+})
+
+router.get("/remote-servers/rebuild", async (req, res) => {
+  const running = await succeeds("tmux", ["has-session", "-t", "=" + REBUILD_SESSION])
+  const log = await fs.readFile(rebuildLog(req), "utf8").catch(() => "")
+  res.json({
+    startedAt,
+    running,
+    failed: !running && log.includes(REBUILD_FAILED),
+    log: log.trim().split("\n").slice(-5).join("\n"),
+  })
+})
+
+router.post("/remote-servers/rebuild", async (req, res) => {
+  const cgroup = await fs.readFile("/proc/self/cgroup", "utf8").catch(() => "")
+  const unit = /\/user@\d+\.service\/.*\/([\w@.-]+\.service)$/m.exec(cgroup)?.[1]
+  if (!unit) {
+    throw new HttpError("Not running as a systemd user service", HttpCode.BadRequest)
+  }
+  // A tmux server started from here would belong to this service and stop with it.
+  if (!(await succeeds("tmux", ["list-sessions"]))) {
+    throw new HttpError("Start a tmux session outside the launcher first", HttpCode.BadRequest)
+  }
+  if (await succeeds("tmux", ["has-session", "-t", "=" + REBUILD_SESSION])) {
+    throw new HttpError("Already rebuilding", HttpCode.Conflict)
+  }
+  const log = quotePath(rebuildLog(req))
+  const script = [
+    `export PATH=${quotePath(path.dirname(process.execPath))}:"$PATH"`,
+    `npm run build > ${log} 2>&1 && systemctl --user restart ${quotePath(unit)} >> ${log} 2>&1 || echo ${REBUILD_FAILED} >> ${log}`,
+  ].join("; ")
+  await promisify(execFile)("tmux", ["new-session", "-d", "-s", REBUILD_SESSION, "-c", rootPath, script])
+  res.json({ startedAt })
 })
 
 // Raw hourly log for the uptime details; the page groups it by its own days.

@@ -1,7 +1,7 @@
 {
   "name": "code-server",
   "license": "MIT",
-  "version": "2026.10.2",
+  "version": "2026.10.5",
   "description": "Run VS Code on a remote server.",
   "homepage": "https://github.com/coder/code-server",
   "bugs": {
@@ -19,6 +19,7 @@
     "test:e2e:proxy": "USE_PROXY=1 ./ci/dev/test-e2e.sh",
     "test:unit": "./ci/dev/test-unit.sh --forceExit --detectOpenHandles",
     "test:integration": "./ci/dev/test-integration.sh",
+    "test:session-broker": "node test/integration/session-broker.cjs && node test/integration/session-broker.cjs --external",
     "test:native": "./ci/dev/test-native.sh",
     "test:scripts": "./ci/dev/test-scripts.sh",
     "package": "./ci/build/build-packages.sh",

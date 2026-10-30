@@ -8,6 +8,10 @@
       content="style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; manifest-src 'self'; img-src 'self' data:; font-src 'self' data:;"
     />
     <meta name="color-scheme" content="dark" />
+    <!-- Home screen app: the page paints the status bar area itself (see .topbar, .shell), solid, so nothing
+         shows through it blurred. -->
+    <meta name="theme-color" content="#2c2c2c" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Servers</title>
     <link rel="icon" href="{{CS_STATIC_BASE}}/src/images/{{LOGO}}.svg" />
     <link rel="apple-touch-icon" sizes="192x192" href="{{CS_STATIC_BASE}}/src/images/{{LOGO}}-192.png" />
@@ -15,7 +19,7 @@
     <link rel="manifest" href="{{BASE}}/manifest.json" crossorigin="use-credentials" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/global.css" rel="stylesheet" />
     <link href="{{CS_STATIC_BASE}}/src/browser/pages/theme.css" rel="stylesheet" />
-    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=33" rel="stylesheet" />
+    <link href="{{CS_STATIC_BASE}}/src/browser/pages/remote.css?v=49" rel="stylesheet" />
     <!-- Shipped with VS Code; used by the SSH shell. -->
     <link href="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/css/xterm.css" rel="stylesheet" />
     <script defer src="{{CS_STATIC_BASE}}/lib/vscode/node_modules/@xterm/xterm/lib/xterm.js"></script>
@@ -31,6 +35,25 @@
         <span class="short">CSR</span>
       </div>
       <span class="topbar-actions">
+        <button type="button" class="usage-strip" aria-label="AI usage" hidden></button>
+        <button
+          type="button"
+          class="icon-btn rebuild"
+          title="Rebuild and restart (tmux)"
+          aria-label="Rebuild and restart"
+          hidden
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 12a9 9 0 1 1-2.6-6.4L21 8M21 3v5h-5" />
+          </svg>
+        </button>
         <button
           type="button"
           id="notifications-open"
@@ -40,12 +63,6 @@
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
-          </svg>
-        </button>
-        <button type="button" id="split-open" class="icon-btn" title="Split view" aria-label="Split view">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <path d="M12 4v16" />
           </svg>
         </button>
         <a class="icon-btn" href="{{BASE}}/logout" title="Log out" aria-label="Log out">
@@ -280,29 +297,6 @@
 
     <!-- Not a <dialog>: Escape must reach the terminal. -->
     <div id="shell" class="shell" hidden>
-      <!-- Close sits top right in the shell, files and VS Code alike. -->
-      <div class="shell-head">
-        <button type="button" id="shell-title" class="shell-title" aria-label="Edit shell session alias"></button>
-        <button type="button" id="font-down" class="icon-btn" aria-label="Smaller text" title="Smaller text">A−</button>
-        <button type="button" id="font-up" class="icon-btn" aria-label="Larger text" title="Larger text">A+</button>
-        <button type="button" class="icon-btn split-here" aria-label="Split view" title="Split view">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <path d="M12 4v16" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          id="shell-close"
-          class="icon-btn"
-          aria-label="Close (keeps running)"
-          title="Close (keeps running)"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
-      </div>
       <div id="term" class="term">
         <span id="ghost" class="ghost" hidden></span><span id="preedit" class="preedit" hidden></span>
       </div>
@@ -317,6 +311,20 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <rect x="2" y="6" width="20" height="13" rx="2" />
             <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M9 15h6" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          tabindex="-1"
+          id="kbd-haptics"
+          aria-label="Key vibration"
+          title="Key vibration"
+          aria-pressed="true"
+          hidden
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="7" y="3" width="10" height="18" rx="2" />
+            <path d="M3 8v8M21 8v8M11 17h2" />
           </svg>
         </button>
         <button type="button" tabindex="-1" id="copy" aria-label="Copy" title="Copy">
@@ -366,22 +374,8 @@
       <div id="kbd" class="kbd" role="group" aria-label="Keyboard"></div>
     </div>
 
-    <!-- VS Code in a frame under the shell's header, so the way back covers nothing. -->
+    <!-- VS Code in a frame. -->
     <div id="editor" class="shell" hidden>
-      <div class="shell-head">
-        <span id="editor-title" class="shell-title"></span>
-        <button type="button" class="icon-btn split-here" aria-label="Split view" title="Split view">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="4" width="18" height="16" rx="2" />
-            <path d="M12 4v16" />
-          </svg>
-        </button>
-        <button type="button" id="editor-close" class="icon-btn" aria-label="Close VS Code" title="Close VS Code">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
-        </button>
-      </div>
       <iframe
         id="editor-frame"
         class="editor-frame"
@@ -450,17 +444,6 @@
               <circle cx="12" cy="12" r="3" />
             </svg>
           </button>
-          <button type="button" class="icon-btn split-here" aria-label="Split view" title="Split view">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="4" width="18" height="16" rx="2" />
-              <path d="M12 4v16" />
-            </svg>
-          </button>
-          <button type="button" id="files-close" class="icon-btn" aria-label="Close files" title="Close files">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
-          </button>
         </span>
       </div>
       <div class="files-body">
@@ -476,11 +459,6 @@
         ></div>
         <section id="files-preview" class="files-preview" hidden>
           <div class="files-preview-head">
-            <button type="button" id="preview-close" class="icon-btn" aria-label="Close preview" title="Close preview">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
             <b id="preview-name"></b>
             <!-- Raw text or the rendered (Markdown, HTML) / parsed (JSON, YAML) view. -->
             <button type="button" id="preview-mode" class="icon-btn" hidden></button>
@@ -506,21 +484,23 @@
                 <path d="M12 4v12M6 11l6 6 6-6M4 20h16" />
               </svg>
             </a>
+            <button type="button" id="preview-close" class="icon-btn" aria-label="Close preview" title="Close preview">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
           </div>
           <div id="preview-body" class="files-preview-body"></div>
         </section>
       </div>
     </div>
 
-    <!-- Panes side by side, each this page in a frame: a shell, files or VS Code on any server. -->
+    <!-- Groups of tabs side by side, each tab this page in a frame: a shell, files or VS Code on any server. -->
     <div id="split" class="shell split" hidden>
       <div class="shell-head">
-        <span class="shell-title">Split view</span>
-        <button type="button" id="split-add" class="icon-btn" aria-label="Add a pane" title="Add a pane">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
+        <button type="button" class="usage-strip" aria-label="AI usage" hidden></button>
+        <button type="button" id="font-down" class="icon-btn" aria-label="Smaller text" title="Smaller text">A−</button>
+        <button type="button" id="font-up" class="icon-btn" aria-label="Larger text" title="Larger text">A+</button>
         <button
           type="button"
           id="split-close"
@@ -533,7 +513,7 @@
           </svg>
         </button>
       </div>
-      <div id="panes" class="panes"></div>
+      <div id="panes" class="panes"><div id="pane-drop" class="pane-drop" hidden></div></div>
     </div>
 
     <dialog id="progress" class="card sheet">
@@ -647,6 +627,36 @@
     </dialog>
 
     <!-- Uptime details of one server; see openUptime(). -->
+    <!-- Claude Code and Codex limits, read on This computer; one row per account (config folder). -->
+    <dialog id="usage-dialog" class="card sheet">
+      <div class="sheet-head">
+        <h2>AI usage</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+      <div class="sheet-body entry-body">
+        <div id="usage-list" class="entry-list"></div>
+        <form id="usage-form" class="entry-form usage-form">
+          <select class="field" name="tool" aria-label="Tool">
+            <option value="claude">Claude</option>
+            <option value="codex">Codex</option>
+            <option value="cswap">cswap</option>
+          </select>
+          <input class="field" name="name" placeholder="Name" maxlength="40" required aria-label="Name" />
+          <input class="field" name="dir" placeholder="~/.claude-work" maxlength="1024" required aria-label="Folder" />
+          <button type="submit" class="btn">Add</button>
+        </form>
+        <p class="usage-note">
+          Folder: Claude Code's <code>CLAUDE_CONFIG_DIR</code>, where its status line saves <code>usage.json</code>, or
+          Codex's <code>CODEX_HOME</code>. For cswap, its path (e.g. <code>~/.local/bin/cswap</code>): lists all its
+          Claude accounts.
+        </p>
+      </div>
+    </dialog>
+
     <dialog id="uptime-dialog" class="card sheet">
       <div class="sheet-head">
         <h2 id="uptime-title">Uptime</h2>
@@ -758,6 +768,8 @@
         plug: '<path d="M18.4 6.6a9 9 0 1 1-12.8 0M12 2v10"/>',
         stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
         chart: '<path d="M3 3v18h18M7 15l4-4 3 3 6-6"/>',
+        plus: '<path d="M12 5v14M5 12h14"/>',
+        close: '<path d="M6 6l12 12M18 6L6 18"/>',
         monitor: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
         folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
         file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
@@ -1272,6 +1284,154 @@
         return m < 1440 ? `${Math.floor(m / 60)}h ago` : `${Math.floor(m / 1440)}d ago`
       }
 
+      // AI usage per account, in the top bars; the server reads it on This computer at most once a minute.
+      let usage = []
+      const until = (t) => {
+        const m = Math.max(0, Math.round((t - Date.now()) / 60000))
+        if (m < 60) return `${m}m`
+        return m < 1440
+          ? `${Math.floor(m / 60)}h ${m % 60}m`
+          : `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h`
+      }
+      // Shown as what is left of each window.
+      const left = (w) => Math.max(0, 100 - Math.round(w.used))
+      const windowText = (w) => `${w.label} ${left(w)}% left${w.resetsAt ? ` · resets in ${until(w.resetsAt)}` : ""}`
+      const usageText = (a) =>
+        (a.windows.map(windowText).join(" · ") || "No data yet") + (a.at ? ` · updated ${ago(a.at)}` : "")
+      const level = (w) => (w.used >= 90 ? " high" : w.used >= 70 ? " mid" : "")
+      const stale = (a) => !a.at || Date.now() - a.at > 3600000
+      // The top bars show each account's session (shortest) window; the dialog has the rest.
+      const drawUsage = () => {
+        for (const strip of document.querySelectorAll(".usage-strip")) {
+          strip.hidden = !usage.length
+          strip.title = usage.map((a) => `${a.name}: ${usageText(a)}`).join("\n")
+          strip.replaceChildren(
+            ...usage.map((a) => {
+              // Not refreshed for an hour: Claude saves it only while running.
+              const acct = el("span", "usage-acct" + (stale(a) ? " stale" : ""))
+              acct.append(el("b", "", a.name.split("@")[0]))
+              // Codex may report only a weekly window.
+              const w = a.windows.find((w) => w.label !== "7d") || a.windows[0]
+              if (w) {
+                const bar = el("span", "usage-bar" + level(w))
+                bar.style.setProperty("--left", left(w) + "%")
+                const win = el("span", "usage-win" + level(w))
+                win.append(bar, el("small", "", left(w) + "%"))
+                acct.append(win)
+              } else acct.append(el("small", "", "–"))
+              return acct
+            }),
+          )
+        }
+        if ($("usage-dialog").open) drawUsageList()
+      }
+      const loadUsage = async () => {
+        try {
+          usage = await request("GET", `${api}/usage`)
+          drawUsage()
+        } catch {
+          // Shown again on the next refresh.
+        }
+      }
+      const saveUsageAccounts = async (accounts) => {
+        try {
+          await request("PUT", `${api}/usage/accounts`, accounts)
+          await loadUsage()
+        } catch (error) {
+          toast(`Failed to save accounts: ${error.message}`, true)
+        }
+      }
+      // A cswap entry comes back as one per account, all with its id; saved once, as entered.
+      const accountsOf = () =>
+        [...new Map(usage.map((a) => [a.id, a.configured || a])).values()].map(({ id, tool, name, dir }) => ({
+          id,
+          tool,
+          name,
+          dir,
+        }))
+      const resetAt = (t) =>
+        new Date(t).toLocaleString([], {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      const windowName = (w) => (w.label === "7d" ? "Weekly" : `Session · ${w.label}`)
+      // One card per account: a meter per window with what is left and when it resets.
+      const drawUsageList = () =>
+        $("usage-list").replaceChildren(
+          ...usage.map((a) => {
+            const card = el("div", "usage-card" + (stale(a) ? " stale" : ""))
+            const head = el("div", "usage-card-head")
+            const text = el("span")
+            const meta = `${a.tool === "codex" ? "Codex" : "Claude"} · ${a.dir}${a.at ? ` · updated ${ago(a.at)}` : ""}`
+            text.append(el("b", "", a.name), el("small", "", meta))
+            const remove = () => saveUsageAccounts(accountsOf().filter((x) => x.id !== a.id))
+            head.append(text, iconButton("trash", `Remove ${a.configured?.name || a.name}`, remove))
+            card.append(head)
+            a.windows.forEach((w) => {
+              const row = el("div", "usage-row")
+              const meter = el("span", "usage-meter" + level(w))
+              meter.style.setProperty("--left", left(w) + "%")
+              const reset = w.resetsAt ? `Resets in ${until(w.resetsAt)} · ${resetAt(w.resetsAt)}` : "Not started"
+              row.append(el("span", "usage-row-name", windowName(w)), el("b", "", `${left(w)}% left`))
+              row.append(meter, el("small", "", reset))
+              card.append(row)
+            })
+            if (!a.windows.length) card.append(el("small", "usage-empty", "No data yet"))
+            return card
+          }),
+        )
+      // Development builds, in the launcher: rebuild and restart it in tmux (see the server); reloads once it's back.
+      const rebuild = async () => {
+        const go = await ask(
+          "Rebuild and restart?",
+          "Runs npm run build in tmux, then restarts this launcher. Shells kept by the session broker keep running.",
+          "Rebuild",
+        )
+        if (!go) return
+        const busy = (on) => document.querySelectorAll(".rebuild").forEach((b) => b.classList.toggle("busy", on))
+        let before
+        try {
+          ;({ startedAt: before } = await request("POST", `${api}/rebuild`))
+        } catch (error) {
+          return toast(`Rebuild failed: ${error.message}`, true)
+        }
+        busy(true)
+        toast("Building…")
+        const poll = setInterval(async () => {
+          // Fails while the launcher restarts.
+          const s = await request("GET", `${api}/rebuild`).catch(() => undefined)
+          if (s && s.startedAt !== before) {
+            clearInterval(poll)
+            location.reload()
+          } else if (s?.failed) {
+            clearInterval(poll)
+            busy(false)
+            toast(`Rebuild failed: ${s.log.split("\n").pop()}`, true)
+          }
+        }, 2000)
+      }
+      if (!pane && "{{VERSION}}".endsWith("-dev")) {
+        document.querySelectorAll(".rebuild").forEach((b) => {
+          b.hidden = false
+          b.onclick = rebuild
+        })
+      }
+      document.querySelectorAll(".usage-strip").forEach((b) => {
+        b.onclick = () => {
+          drawUsageList()
+          $("usage-dialog").showModal()
+        }
+      })
+      $("usage-form").onsubmit = (e) => {
+        e.preventDefault()
+        const account = Object.fromEntries(new FormData(e.target))
+        e.target.reset()
+        saveUsageAccounts([...accountsOf(), account])
+      }
+
       // One row per running VS Code or shell; the icon is the one from the mode dialog.
       const sessionRow = (mode, name, meta, title, resume, end, endLabel) => {
         const li = el("li", "shell-item")
@@ -1535,6 +1695,13 @@
       // Ask for account and password unless the server has saved credentials.
       const connect = (s, mode = "code", folder = s.folder) => {
         if (connecting) return
+        // The launcher opens everything in a tab, and files in a tab opens a shell or VS Code in the next
+        // one; signing in and connecting happen there.
+        if (!pane || !$("files").hidden)
+          return (pane ? parent : window).openTab(
+            mode + "=" + encodeURIComponent(s.id) + (folder ? "&folder=" + encodeURIComponent(folder) : ""),
+            frameElement,
+          )
         const go = { code: start, shell, files }[mode]
         // Files asks only when no saved key or live sign-in (kept 15 minutes) works.
         if ((mode === "code" && s.connected) || mode === "files" || s.hasPassword || s.identityFile) {
@@ -1587,17 +1754,12 @@
         }
       }
 
-      // Query that reopens the shell, files or VS Code shown now, for moving it into a split pane.
-      let here
-      let editorPrevTitle
       const openEditor = (s, folder) => {
+        if (!pane) return connect(s, "code", folder)
         const q = folder ? "?folder=" + encodeURIComponent(folder) : ""
-        editorPrevTitle = document.title
         document.title = `${s.name} · VS Code`
-        $("editor-title").textContent = s.name
         $("editor-frame").src = `${base}/remote/${s.id}/${q}`
         $("editor").hidden = false
-        here = "code=" + encodeURIComponent(s.id) + q.replace("?", "&")
         // Reloading the page reopens the editor.
         history.replaceState(
           null,
@@ -1605,14 +1767,6 @@
           (pane ? "?pane&" : "?") + "code=" + encodeURIComponent(s.id) + q.replace("?", "&"),
         )
       }
-      $("editor-close").onclick = () => {
-        $("editor").hidden = true
-        $("editor-frame").src = "about:blank"
-        document.title = editorPrevTitle
-        history.replaceState(null, "", location.pathname + (pane ? "?pane" : ""))
-        load()
-      }
-
       // Escape sequences for the key bar; arrows/Home/End differ in application cursor mode (vim, less).
       const keySeq = (key, app) => {
         const ss3 = app ? "\x1bO" : "\x1b["
@@ -1753,10 +1907,24 @@
         ctrl: [..."CDZLRAEUKW"].map((c) => [`Ctrl+${c}`, ctrlKey(c)]),
         alt: [..."BFD."].map((c) => [`Alt+${c}`, "\x1b" + c.toLowerCase()]),
         tab: [["Shift+Tab", "\x1b[Z"]],
-        left: [["Ctrl+←", "\x1b[1;5D"]],
-        right: [["Ctrl+→", "\x1b[1;5C"]],
-        up: [["Ctrl+↑", "\x1b[1;5A"]],
-        down: [["Ctrl+↓", "\x1b[1;5B"]],
+        left: [
+          ["Shift+←", "\x1b[1;2D"],
+          ["Ctrl+←", "\x1b[1;5D"],
+          ["Ctrl+Shift+←", "\x1b[1;6D"],
+        ],
+        right: [
+          ["Shift+→", "\x1b[1;2C"],
+          ["Ctrl+→", "\x1b[1;5C"],
+          ["Ctrl+Shift+→", "\x1b[1;6C"],
+        ],
+        up: [
+          ["Shift+↑", "\x1b[1;2A"],
+          ["Ctrl+↑", "\x1b[1;5A"],
+        ],
+        down: [
+          ["Shift+↓", "\x1b[1;2B"],
+          ["Ctrl+↓", "\x1b[1;5B"],
+        ],
       }
       for (const b of $("keys").children) {
         if (COMBOS[b.dataset.key || b.dataset.mod]) b.classList.add("has-combos")
@@ -1775,6 +1943,18 @@
       const keyboard = (target) => {
         // Sticky Ctrl/Alt from the key bar apply to the next key, typed or tapped.
         const keys = $("keys")
+        const haptics = $("kbd-haptics")
+        const canVibrate = touch && typeof navigator.vibrate === "function"
+        let vibrationOn = storage("kbd-vibration") !== "0"
+        haptics.hidden = !canVibrate
+        haptics.setAttribute("aria-pressed", vibrationOn)
+        const keyFeedback = (pointerType) => {
+          if (!canVibrate || !vibrationOn || (pointerType !== "touch" && pointerType !== "pen")) return
+          // A browser or device can refuse vibration; typing must still work.
+          try {
+            navigator.vibrate(8)
+          } catch {}
+        }
         const mods = { ctrl: false, alt: false }
         // Keep keys behind a committed syllable in order, including fast taps while
         // the TUI needs a separate read for the following Enter or control key.
@@ -1813,14 +1993,44 @@
         }
         setMod("ctrl", false)
         setMod("alt", false)
-        const input = (d) => {
+        const input = (d, event = {}) => {
           // Focus reports (apps like Claude Code ask for them) aren't key presses.
           if (d === "\x1b[I" || d === "\x1b[O") return target.raw(d)
+          // Hardware keyboards on iPads send Korean as lone jamo: compose them like the on-screen keyboard.
+          if (touch && !mods.ctrl && !mods.alt && !event.ctrlKey && !event.altKey) {
+            if (d.length === 1 && (CHO.includes(d) || JUNG.includes(d))) {
+              const [next, done] = hangul(composing, d)
+              if (done) deliver(done)
+              return compose(next)
+            }
+            if (d === "\x7f" && syllable(composing)) return compose(hangulBack(composing))
+          }
           flush()
-          if ((mods.ctrl || mods.alt) && KO.includes(d)) d = EN[KO.indexOf(d)]
-          const c = d.length === 1 ? d.toUpperCase().charCodeAt(0) : 0
-          if (mods.ctrl && c >= 64 && c < 96) d = String.fromCharCode(c & 31)
-          if (mods.alt) d = "\x1b" + d
+          const ctrl = mods.ctrl || event.ctrlKey
+          const alt = mods.alt || event.altKey
+          const shifted = shift !== SHIFT_OFF || event.shiftKey
+          const cursor = /^\x1b(?:\[1;(\d+)|\[|O)([ABCDHF])$/.exec(d)
+          const page = /^\x1b\[([56])(?:;(\d+))?~$/.exec(d)
+          if (cursor || page || (d === "\t" && shifted)) {
+            // xterm modifiers are a bitmap + 1. Modified cursor keys use CSI
+            // even when the application normally asks for SS3 cursor keys.
+            const existing = Number(cursor?.[1] || page?.[2] || 1) - 1
+            const modifier = 1 + (existing | (shifted ? 1 : 0) | (alt ? 2 : 0) | (ctrl ? 4 : 0))
+            if (modifier > 1) {
+              if (cursor) d = `\x1b[1;${modifier}${cursor[2]}`
+              else if (page) d = `\x1b[${page[1]};${modifier}~`
+              else d = "\x1b[Z"
+            }
+            if (shift === SHIFT_ONCE) {
+              shift = SHIFT_OFF
+              drawKbd()
+            }
+          } else {
+            if ((ctrl || alt) && KO.includes(d)) d = EN[KO.indexOf(d)]
+            const c = d.length === 1 ? d.toUpperCase().charCodeAt(0) : 0
+            if (ctrl && c >= 64 && c < 96) d = String.fromCharCode(c & 31)
+            if (alt) d = "\x1b" + d
+          }
           setMod("ctrl", false)
           setMod("alt", false)
           deliver(d)
@@ -1870,6 +2080,7 @@
         let longPressed = false
         keys.onpointerdown = (e) => {
           const b = e.target.closest("button")
+          if (b && b.id !== "kbd-haptics") keyFeedback(e.pointerType)
           const list = b && COMBOS[b.dataset.key || b.dataset.mod]
           longPressed = false
           clearTimeout(pressTimer)
@@ -1886,6 +2097,7 @@
                   flush()
                   target.raw(seq)
                 }
+                c.onpointerdown = (e) => keyFeedback(e.pointerType)
                 return c
               }),
             )
@@ -1898,13 +2110,20 @@
         keys.onclick = (e) => {
           const b = e.target.closest("button")
           if (!b || longPressed) return
+          if (b.id === "kbd-haptics") {
+            vibrationOn = !vibrationOn
+            storage("kbd-vibration", vibrationOn ? "1" : "0")
+            haptics.setAttribute("aria-pressed", vibrationOn)
+            keyFeedback(e.pointerType)
+            return
+          }
           if (b.id === "kbd-toggle") return setKbd(kbd.hidden)
           if (b.id === "copy") return copy()
           if (b.id === "paste") return paste()
           if (b.id === "type") return typeText()
           combos.hidden = true
           if (b.dataset.mod) setMod(b.dataset.mod, !mods[b.dataset.mod])
-          else input(keySeq(b.dataset.key, target.appCursor()))
+          else input(keySeq(b.dataset.key, target.appCursor()), e)
         }
         const kbd = $("kbd")
         let layer = "abc"
@@ -1994,11 +2213,13 @@
           const b = e.target.closest("button") || nearestKey(e.clientX, e.clientY)
           if (!b) return
           e.preventDefault()
+          keyFeedback(e.pointerType)
           b.classList.add("down")
           setTimeout(() => b.classList.remove("down"), 100)
           press(b.dataset.k)
           if (b.dataset.k !== "bksp") return
           const again = () => {
+            keyFeedback(e.pointerType)
             press("bksp")
             keyboardRepeat = setTimeout(again, 60)
           }
@@ -2017,10 +2238,10 @@
       let closeShell = () => {}
       // Opens a new shell, or reattaches to a running one when id is given.
       const shell = (s, creds = {}, folder, id, snapshot = {}) => {
+        if (!pane) return id ? openTab(`shell=${encodeURIComponent(s.id)}&attach=${id}`) : connect(s, "shell", folder)
         closeShell()
         const prevTitle = document.title
         document.title = `${s.name} · Shell`
-        $("shell-title").textContent = s.name
         $("shell").hidden = false
         const box = $("term")
         const term = new Terminal({
@@ -2060,12 +2281,11 @@
         let renamed = false
         const renderTitle = () => {
           const name = alias || s.name
-          document.title = `${name} · Shell`
-          $("shell-title").textContent = where ? `${name} · ${where}` : name
-          $("shell-title").title = `${s.name}${where ? " · " + where : ""} · Edit session alias`
+          // Names the tab.
+          document.title = where ? `${name} · ${where}` : name
         }
         renderTitle()
-        // Top bar: session name plus the directory, from the shell's OSC 7 or, failing that, its window title
+        // Tab: session name plus the directory, from the shell's OSC 7 or, failing that, its window title
         // (bash on Debian/Ubuntu sets "user@host: dir"). ponytail: shells that send neither show the name only.
         const bar = (value) => {
           where = value
@@ -2150,14 +2370,14 @@
         url.protocol = url.protocol === "https:" ? "wss:" : "ws:"
         const attach = !!id
         id ||= [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, "0")).join("")
-        here = `shell=${encodeURIComponent(s.id)}&attach=${id}`
         let ws
         let opened = false
         let closed = false
         let dropped = false
         let retry
         const aliasDialog = $("alias-dialog")
-        $("shell-title").onclick = () => {
+        // The tab's edit button calls this.
+        window.editAlias = () => {
           $("alias-input").value = alias
           aliasDialog.showModal()
           $("alias-input").focus()
@@ -2334,7 +2554,23 @@
         suggest.onmousedown = (e) => e.preventDefault()
         // On touch screens the OS keyboard covers the terminal and mangles input
         // (autocorrect, Korean jamo), so it stays closed and the on-screen one types instead.
-        if (touch) term.textarea.setAttribute("inputmode", "none")
+        // A hardware keyboard (iPad) needs it open, though: with inputmode=none iPadOS ignores its
+        // language key. So a key from one lets it back in, and using the on-screen one keeps it closed again.
+        const osKeyboard = (on) => {
+          if (on === !term.textarea.hasAttribute("inputmode")) return
+          if (on) term.textarea.removeAttribute("inputmode")
+          else term.textarea.setAttribute("inputmode", "none")
+          // iPadOS reads it on focus.
+          if (document.activeElement === term.textarea) {
+            term.textarea.blur()
+            term.focus()
+          }
+        }
+        if (touch) {
+          osKeyboard(false)
+          term.textarea.addEventListener("keydown", () => setTimeout(() => osKeyboard(true)), true)
+          for (const k of [$("keys"), $("kbd")]) k.addEventListener("pointerdown", () => osKeyboard(false))
+        }
         // A split view types into the last touched pane with a shell.
         if (pane) {
           window.shellTarget = target
@@ -2352,15 +2588,23 @@
             showHints()
           })
         }
-        $("font-down").onclick = () => zoom(-1)
-        $("font-up").onclick = () => zoom(1)
+        // The split view's text size buttons call this.
+        window.shellZoom = zoom
         term.onData(input)
         // Ctrl+C (or Ctrl+Shift+C) over a selection copies, like VS Code's terminal. Without a
         // selection it is still ^C. Written here, as xterm's empty textarea may raise no copy event;
         // that event (xterm's listener) stays as the fallback when the clipboard API is refused.
         term.attachCustomKeyEventHandler((e) => {
-          if (e.type !== "keydown" || !e.ctrlKey || e.code !== "KeyC" || !term.hasSelection()) return true
-          navigator.clipboard?.writeText(term.getSelection()).catch(() => {})
+          if (e.type !== "keydown" || !e.ctrlKey || e.altKey || e.metaKey || !/^Key[A-Z]$/.test(e.code)) return true
+          if (e.code === "KeyC" && term.hasSelection()) {
+            navigator.clipboard?.writeText(term.getSelection()).catch(() => {})
+            return false
+          }
+          // iPadOS hands Ctrl+letter to its input method in Korean (ㅊ for Ctrl+C), so send the
+          // control character from the physical key instead.
+          if (!touch) return true
+          e.preventDefault()
+          input(String.fromCharCode(e.code.charCodeAt(3) - 64))
           return false
         })
         // xterm cancels touch events, so a tap never focuses it. Taps (not scrolls)
@@ -2440,7 +2684,7 @@
           // Detach only; the shell keeps running.
           closed = true
           aliasDialog.close()
-          $("shell-title").onclick = null
+          window.editAlias = window.shellZoom = undefined
           $("alias-form").onsubmit = null
           clearTimeout(retry)
           ws.close()
@@ -2452,10 +2696,95 @@
         }
         term.focus()
       }
-      $("shell-close").onclick = () => closeShell()
 
       // File browser. Listing and previews reuse the ssh login from /files/open.
       const PREVIEW_MAX = 512 * 1024
+      // A home screen app on an iPhone has no way back from a download page, so it saves through the
+      // share sheet (Save to Files, Save Image) instead.
+      const shareSave =
+        touch &&
+        (top.matchMedia("(display-mode: standalone)").matches || navigator.standalone) &&
+        navigator.canShare?.({ files: [new File([""], "f.txt", { type: "text/plain" })] })
+      // [url, File]: fetched by a tap whose permission to share ran out while fetching.
+      let saved
+      $("preview-download").onclick = async (e) => {
+        if (!shareSave) return
+        e.preventDefault()
+        const url = e.currentTarget.dataset.inline
+        try {
+          if (saved?.[0] !== url) {
+            toast("Preparing download…")
+            const res = await fetch(url)
+            if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText)
+            const blob = await res.blob()
+            saved = [url, new File([blob], $("preview-name").textContent, { type: blob.type })]
+          }
+          await navigator.share({ files: [saved[1]] })
+        } catch (error) {
+          if (error.name === "NotAllowedError") toast("Ready: tap download again to save")
+          else if (error.name !== "AbortError") toast(`Download failed: ${error.message}`, true)
+        }
+      }
+      // Pinch, ctrl+wheel (trackpad pinch) or double tap to zoom an image; drag or scroll to move around.
+      const zoomable = (img, box) => {
+        let z = 1
+        let fit
+        // Keeps the point under client x, y in place.
+        const zoom = (next, x, y) => {
+          next = Math.min(8, Math.max(1, next))
+          if (z === 1) fit = img.getBoundingClientRect().width
+          const r = box.getBoundingClientRect()
+          const [cx, cy] = [x - r.left, y - r.top]
+          const k = next / z
+          const [sx, sy] = [(box.scrollLeft + cx) * k - cx, (box.scrollTop + cy) * k - cy]
+          z = next
+          img.style.maxWidth = z === 1 ? "" : "none"
+          img.style.width = z === 1 ? "" : fit * z + "px"
+          img.classList.toggle("zoomed", z > 1)
+          box.scrollTo(sx, sy)
+        }
+        img.onwheel = (e) => {
+          if (!e.ctrlKey) return
+          e.preventDefault()
+          zoom(z * Math.exp(-e.deltaY / 100), e.clientX, e.clientY)
+        }
+        let pinch
+        const spread = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+        const mid = (t) => [(t[0].clientX + t[1].clientX) / 2, (t[0].clientY + t[1].clientY) / 2]
+        img.ontouchstart = (e) => (pinch = e.touches.length === 2 && { d: spread(e.touches), z })
+        img.addEventListener(
+          "touchmove",
+          (e) => {
+            if (!pinch || e.touches.length !== 2) return
+            e.preventDefault()
+            zoom((pinch.z * spread(e.touches)) / pinch.d, ...mid(e.touches))
+          },
+          { passive: false },
+        )
+        // Dragging moves a zoomed image, by mouse or finger (touch-action none, see CSS).
+        img.draggable = false
+        let drag
+        img.onpointerdown = (e) => {
+          drag = z > 1 &&
+            e.isPrimary &&
+            !e.button && { x: e.clientX, y: e.clientY, l: box.scrollLeft, t: box.scrollTop }
+          if (drag) img.setPointerCapture(e.pointerId)
+        }
+        img.onpointermove = (e) => {
+          if (!drag || pinch) return
+          const [dx, dy] = [e.clientX - drag.x, e.clientY - drag.y]
+          if (Math.hypot(dx, dy) > 5) drag.moved = true
+          box.scrollTo(drag.l - dx, drag.t - dy)
+        }
+        // Timed here, as touch screens may send no dblclick.
+        let last = 0
+        img.onclick = (e) => {
+          if (drag?.moved) return (last = 0)
+          if (e.timeStamp - last > 300) return (last = e.timeStamp)
+          last = 0
+          zoom(z > 1 ? 1 : 2.5, e.clientX, e.clientY)
+        }
+      }
       const IMAGE = /\.(png|jpe?g|gif|webp|svg)$/i
       const VIDEO = /\.(mp4|webm|mov)$/i
       const AUDIO = /\.(mp3|m4a|wav|ogg|flac)$/i
@@ -2592,6 +2921,7 @@
       }
       let closeFiles = () => {}
       const files = async (s, creds, folder = "~") => {
+        if (!pane) return connect(s, "files", folder)
         closeFiles()
         const fapi = `${api}/${s.id}/files`
         const raw = (p, q = "") => `${fapi}/raw?path=${encodeURIComponent(p)}${q}`
@@ -2658,7 +2988,6 @@
           try {
             ;({ path: cwd, entries } = await request("GET", `${fapi}?path=${encodeURIComponent(p)}`))
             document.title = `${cwd} · ${s.name}`
-            here = `files=${encodeURIComponent(s.id)}&folder=${encodeURIComponent(cwd)}`
             selected = undefined
             preview.hidden = true
             drawCrumbs()
@@ -2678,6 +3007,7 @@
           const body = $("preview-body")
           $("preview-name").textContent = e.name
           $("preview-download").href = raw(p, "&download=1")
+          $("preview-download").dataset.inline = raw(p)
           $("preview-open").href = raw(p)
           $("preview-delete").onclick = () => remove(e)
           $("preview-mode").hidden = true
@@ -2692,8 +3022,10 @@
                 : PDF.test(e.name) && "iframe"
           if (media) {
             const m = el(media, "files-media")
-            if (media === "img") m.alt = e.name
-            else if (media === "iframe") m.title = e.name
+            if (media === "img") {
+              m.alt = e.name
+              zoomable(m, body)
+            } else if (media === "iframe") m.title = e.name
             else m.controls = true
             m.src = raw(p)
             return body.replaceChildren(m)
@@ -2919,7 +3251,7 @@
           if (e.dataTransfer.files.length) upload([...e.dataTransfer.files])
         }
 
-        // The shell opens over the file browser; closing it comes back here.
+        // In a tab next to this one (see connect).
         $("files-code").onclick = () => connect(s, "code", cwd)
         $("files-shell").onclick = () => connect(s, "shell", cwd)
         $("files-entry").onclick = () => chooseEntry(s, cwd)
@@ -2958,7 +3290,6 @@
         }
         open(folder)
       }
-      $("files-close").onclick = () => closeFiles()
 
       // List/preview split on wide screens, as a percentage of the list; remembered.
       const filesBody = document.querySelector(".files-body")
@@ -2997,6 +3328,19 @@
       }
       // Escape would hide the dialog while the connection keeps going.
       progress.addEventListener("cancel", (e) => e.preventDefault())
+      // A tap on the dimmed backdrop closes a dialog like Escape does. Pressed there too, so a text selection
+      // dragged out of the dialog doesn't.
+      let pressedOutside
+      const outside = (e) =>
+        e.target.tagName === "DIALOG" &&
+        ((r) => e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)(
+          e.target.getBoundingClientRect(),
+        )
+      document.addEventListener("pointerdown", (e) => (pressedOutside = outside(e)))
+      document.addEventListener("click", (e) => {
+        if (!pressedOutside || !outside(e)) return
+        if (e.target.dispatchEvent(new Event("cancel", { cancelable: true }))) e.target.close()
+      })
 
       const openForm = (s) => {
         editing = s
@@ -3049,7 +3393,7 @@
           const box = (f) => f.getBoundingClientRect()
           const [start, size] = column ? ["top", "height"] : ["left", "width"]
           // Weights in pixels, so the panes not touched keep their size.
-          const frames = [...panes.querySelectorAll(".pane-frame")]
+          const frames = [...panes.querySelectorAll(".pane-group")]
           // Measured before any is set: setting one changes the others.
           frames.map((f) => box(f)[size]).forEach((px, i) => (frames[i].style.flexGrow = px))
           const both = box(a)[size] + box(b)[size]
@@ -3064,7 +3408,7 @@
           e.preventDefault()
           if (e.timeStamp - lastDown < 350) {
             lastDown = 0
-            const frames = [...$("panes").querySelectorAll(".pane-frame")]
+            const frames = [...$("panes").querySelectorAll(".pane-group")]
             frames.forEach((f) => (f.style.flexGrow = 1))
             return storage("pane-sizes-" + frames.length, JSON.stringify(frames.map(() => 1)))
           }
@@ -3087,16 +3431,19 @@
         return d
       }
 
-      // Split view; removing a pane only detaches its shell, like closing it.
+      // Split view: groups side by side, each with tabs, like VS Code's editor groups. Each tab is a frame
+      // laid over its group (moving a frame in the page would reload it); removing one only detaches its shell.
       const PANE_MAX = 4
+      const groups = () => [...$("panes").querySelectorAll(".pane-group")]
+      const frames = () => [...$("panes").querySelectorAll(".pane-frame")]
+      const activeTab = (g) => g.querySelector(".pane-tab.active")
       // One key bar and on-screen keyboard for the whole split view, borrowed from the (hidden)
-      // shell view; it types into the last touched pane with a shell. Other panes don't change it.
+      // shell view; it types into the last touched shown tab with a shell. Other tabs don't change it.
       let typingPane
       const typingShell = () => {
-        const frames = [...$("panes").querySelectorAll(".pane-frame")].filter((f) => f.contentWindow?.shellTarget)
-        if (!frames.includes(typingPane)) typingPane = frames[0]
-        for (const f of $("panes").querySelectorAll(".pane-frame"))
-          f.classList.toggle("typing", f === typingPane && frames.length > 1)
+        const shells = frames().filter((f) => f.tab.classList.contains("active") && f.contentWindow?.shellTarget)
+        if (!shells.includes(typingPane)) typingPane = shells[0]
+        for (const f of frames()) f.classList.toggle("typing", f === typingPane && shells.length > 1)
         $("split").classList.toggle("no-shell", !typingPane)
         return typingPane?.contentWindow.shellTarget
       }
@@ -3113,81 +3460,225 @@
         if (f) typingPane = f
         typingShell()
       }
-      const setPanes = (n, first) => {
-        const panes = $("panes")
-        const frames = () => panes.querySelectorAll(".pane-frame")
-        while (frames().length < n) {
-          if (frames().length) panes.append(paneDivider())
-          const f = el("iframe", "pane-frame")
-          f.title = "Pane"
-          f.allow = "clipboard-read; clipboard-write; fullscreen"
-          f.src = location.pathname + "?pane" + (first && !frames().length ? "&" + first : "")
-          panes.append(f)
+      // And this when their title changes: it names the tab.
+      window.paneTitle = (f) => {
+        // The start screen is titled for the launcher.
+        const title = f.contentDocument?.title.replace(/^Servers$/, "New tab") || "Pane"
+        f.tab.querySelector(".pane-tab-label").textContent = f.tab.title = title
+        // Shells have an alias.
+        f.tab.querySelector(".pane-tab-edit").hidden = !f.contentWindow?.editAlias
+      }
+      // Each frame over its group's body; only the active tab's is shown, once loaded.
+      const placeFrames = () => {
+        const box = $("panes").getBoundingClientRect()
+        for (const f of frames()) {
+          const r = f.tab.closest(".pane-group").querySelector(".pane-body").getBoundingClientRect()
+          Object.assign(f.style, {
+            left: r.left - box.left + "px",
+            top: r.top - box.top + "px",
+            width: r.width + "px",
+            height: r.height + "px",
+            visibility: f.loaded && f.tab.classList.contains("active") ? "" : "hidden",
+          })
         }
-        // The last pane and the divider before it.
-        while (frames().length > n) {
-          panes.lastChild.remove()
-          panes.lastChild.remove()
+      }
+      const placer = new ResizeObserver(placeFrames)
+      // After any change: drop empty groups, put dividers between the rest, sizes, frames, URL.
+      const layout = () => {
+        for (const g of groups()) {
+          if (g.querySelector(".pane-tab")) continue
+          placer.unobserve(g.querySelector(".pane-body"))
+          g.remove()
         }
-        // Pane sizes are flex weights, remembered per layout.
-        const sizes = JSON.parse(storage("pane-sizes-" + n) || "[]")
-        frames().forEach((f, i) => (f.style.flexGrow = sizes.length === n ? sizes[i] : 1))
-        $("split-add").disabled = n >= PANE_MAX
+        const gs = groups()
+        if (!gs.length) return closeSplit()
+        $("panes")
+          .querySelectorAll(".pane-divider")
+          .forEach((d) => d.remove())
+        gs.slice(1).forEach((g) => g.before(paneDivider()))
+        // Group sizes are flex weights, remembered per number of groups.
+        if (gs.length !== layout.n) {
+          const sizes = JSON.parse(storage("pane-sizes-" + gs.length) || "[]")
+          gs.forEach((g, i) => (g.style.flexGrow = sizes.length === gs.length ? sizes[i] : 1))
+          layout.n = gs.length
+        }
+        for (const g of gs) if (!activeTab(g)) g.querySelector(".pane-tab").classList.add("active")
+        placeFrames()
+        typingShell()
+        // Reloading keeps the layout (tabs per group); running shells are resumed from each tab's list.
+        history.replaceState(null, "", "?split=" + gs.map((g) => g.querySelectorAll(".pane-tab").length).join("-"))
+      }
+      const activate = (tab) => {
+        activeTab(tab.parentElement)?.classList.remove("active")
+        tab.classList.add("active")
+        typingPane = tab.frame
+        layout()
+      }
+      const newGroup = () => {
+        const g = el("div", "pane-group")
+        const tabs = el("div", "pane-tabs")
+        tabs.setAttribute("role", "tablist")
+        const add = iconButton("plus", "New tab", () => activate(newTab(g)), "pane-tab-add")
+        tabs.append(add)
+        const body = el("div", "pane-body")
+        g.append(tabs, body)
+        placer.observe(body)
+        return g
+      }
+      // A tab and its frame, in group g; query opens a shell, files or VS Code instead of the start screen.
+      const newTab = (g, query, after) => {
+        const f = el("iframe", "pane-frame")
+        f.title = "Pane"
+        f.allow = "clipboard-read; clipboard-write; fullscreen; web-share"
+        f.src = location.pathname + "?pane" + (query ? "&" + query : "")
+        const tab = el("div", "pane-tab")
+        tab.setAttribute("role", "tab")
+        const label = el("button", "pane-tab-label", "Pane")
+        label.type = "button"
+        label.onclick = () => activate(tab)
+        const edit = iconButton(
+          "edit",
+          "Edit shell session alias",
+          () => f.contentWindow.editAlias?.(),
+          "pane-tab-edit",
+        )
+        edit.hidden = true
+        tab.append(
+          label,
+          edit,
+          iconButton("close", "Close tab", () => removePane(f), "pane-tab-close"),
+        )
+        tab.onpointerdown = (e) => dragTab(e, tab)
+        tab.frame = f
+        f.tab = tab
+        // Hidden until loaded: the dark page shows a frame's initial blank document white.
+        f.onload = () => {
+          f.loaded = true
+          paneTitle(f)
+          placeFrames()
+        }
+        after ? after.after(tab) : g.querySelector(".pane-tab-add").before(tab)
+        $("panes").append(f)
+        return tab
+      }
+      // Dragging a tab: onto a group's tabs or middle moves it there; onto a group's near or far side splits
+      // it into a new group on that side. A group left without tabs is gone, which merges the split back.
+      const dropTarget = (x, y, tab) => {
+        const column = getComputedStyle($("panes")).flexDirection === "column"
+        for (const g of groups()) {
+          const r = g.getBoundingClientRect()
+          if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue
+          const body = g.querySelector(".pane-body").getBoundingClientRect()
+          const at = column ? (y - body.top) / body.height : (x - body.left) / body.width
+          // A tab alone in its group can't split from it, and there are at most PANE_MAX groups.
+          const alone =
+            tab.parentElement.parentElement === g && tab.parentElement.querySelectorAll(".pane-tab").length === 1
+          const side =
+            y < body.top || alone || groups().length >= PANE_MAX ? "" : at < 0.25 ? "before" : at > 0.75 ? "after" : ""
+          return { g, side, body }
+        }
+      }
+      const dragTab = (e, tab) => {
+        if (e.button || e.target.closest(".icon-btn")) return
+        const [x0, y0] = [e.clientX, e.clientY]
+        const drop = $("pane-drop")
+        let target
+        tab.setPointerCapture(e.pointerId)
+        tab.onpointermove = (e) => {
+          if (!target && Math.hypot(e.clientX - x0, e.clientY - y0) < 8) return
+          $("panes").classList.add("dragging")
+          tab.classList.add("dragged")
+          target = dropTarget(e.clientX, e.clientY, tab) || {}
+          drop.hidden = !target.g
+          if (!target.g) return
+          const box = $("panes").getBoundingClientRect()
+          const r = target.side ? target.body : target.g.getBoundingClientRect()
+          const column = getComputedStyle($("panes")).flexDirection === "column"
+          const [start, size] = column ? ["top", "height"] : ["left", "width"]
+          const rect = { left: r.left, top: r.top, width: r.width, height: r.height }
+          if (target.side) {
+            rect[size] /= 2
+            if (target.side === "after") rect[start] += rect[size]
+          }
+          Object.assign(drop.style, {
+            left: rect.left - box.left + "px",
+            top: rect.top - box.top + "px",
+            width: rect.width + "px",
+            height: rect.height + "px",
+          })
+        }
+        tab.onpointerup = tab.onpointercancel = (e) => {
+          tab.onpointermove = tab.onpointerup = tab.onpointercancel = null
+          $("panes").classList.remove("dragging")
+          tab.classList.remove("dragged")
+          drop.hidden = true
+          if (e.type === "pointercancel") return
+          // Not dragged: a tap or click, which the captured pointer keeps from the label.
+          if (!target) return activate(tab)
+          if (!target.g) return
+          let g = target.g
+          if (target.side) {
+            g = newGroup()
+            target.g[target.side](g)
+            // The new group takes half of the one it split from.
+            g.style.flexGrow = target.g.style.flexGrow = (+target.g.style.flexGrow || 1) / 2
+            layout.n = groups().length
+          }
+          // Among the tabs: before the one under the pointer.
+          const before = [...g.querySelectorAll(".pane-tab")].find((t) => {
+            const r = t.getBoundingClientRect()
+            return e.clientY < r.bottom && e.clientX < r.left + r.width / 2
+          })
+          if (before !== tab) (before || g.querySelector(".pane-tab-add")).before(tab)
+          activate(tab)
+          storage("pane-sizes-" + groups().length, JSON.stringify(groups().map((g) => +g.style.flexGrow || 1)))
+        }
+      }
+      // counts: tabs per group; first: what the first tab opens.
+      const setPanes = (counts, first) => {
         if ($("split").hidden) {
           $("split").append($("combos"), $("keys"), $("kbd"))
           keyboard(splitTarget)
         }
-        typingShell()
         $("split").hidden = false
+        // The status bar area matches the top bar shown.
+        document.querySelector("meta[name=theme-color]").content = "#1f1f1f"
         document.title = "Split view"
-        // Reloading keeps the layout; running shells are resumed from each pane's list.
-        history.replaceState(null, "", "?split=" + n)
+        for (const n of counts) {
+          const g = newGroup()
+          $("panes").append(g)
+          for (let i = 0; i < n; i++) newTab(g, !frames().length && first)
+        }
+        layout()
       }
-      // A new split always starts with two panes (the view moved into it, plus one); reloads keep the count.
-      $("split-open").onclick = () => setPanes(2)
-      // From a shell, files or VS Code: it becomes the first pane (a shell reattaches there).
-      // In a pane, the same button ends the split and keeps this pane's view full screen.
-      document.querySelectorAll(".split-here").forEach((b) => {
-        if (pane) {
-          b.title = "Close split view, keep this"
-          b.setAttribute("aria-label", b.title)
-          b.innerHTML =
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2" /></svg>'
-          return (b.onclick = () => parent.location.replace(location.pathname + "?" + here))
-        }
-        b.onclick = () => {
-          const view = b.closest(".shell").id
-          const first = here
-          if (view === "shell") closeShell()
-          else if (view === "files") closeFiles()
-          else $("editor-close").click()
-          setPanes(2, first)
-        }
-      })
-      $("split-add").onclick = () => setPanes(Math.min(PANE_MAX, $("panes").querySelectorAll(".pane-frame").length + 1))
-      // A pane's own close buttons remove it (and the divider next to it); the last one ends the split.
-      window.removePane = (f) => {
-        ;(f.previousElementSibling || f.nextElementSibling)?.remove()
+      // A tab with query (see setPanes): from the launcher, or from frame f's tab, next to it.
+      window.openTab = (query, f) =>
+        $("split").hidden ? setPanes([1], query) : activate(newTab(f.tab.closest(".pane-group"), query, f.tab))
+      // Text size of every shell shown.
+      $("font-down").onclick = () => frames().forEach((f) => f.contentWindow?.shellZoom?.(-1))
+      $("font-up").onclick = () => frames().forEach((f) => f.contentWindow?.shellZoom?.(1))
+      // A tab's close button, or its pane's own close buttons, remove it; the last one ends the split.
+      const removePane = (window.removePane = (f) => {
+        f.tab.remove()
         f.remove()
-        const frames = [...$("panes").querySelectorAll(".pane-frame")]
-        if (!frames.length) return closeSplit()
-        storage("pane-sizes-" + frames.length, JSON.stringify(frames.map((f) => +f.style.flexGrow || 1)))
-        $("split-add").disabled = false
-        typingShell()
-        history.replaceState(null, "", "?split=" + frames.length)
-      }
+        layout()
+      })
       if (pane) {
         // A touch on a shell pane makes it the one the split view's keyboard types into.
         document.addEventListener("pointerdown", () => window.shellTarget && parent.paneShell?.(frameElement), true)
-        for (const id of ["picker-close", "shell-close", "files-close", "editor-close"]) {
-          $(id).addEventListener("click", () => parent.removePane?.(frameElement))
-        }
+        $("picker-close").addEventListener("click", () => parent.removePane?.(frameElement))
+        new MutationObserver(() => parent.paneTitle?.(frameElement)).observe(document.querySelector("title"), {
+          childList: true,
+        })
       }
       const closeSplit = () => {
         clearTimeout(keyboardRepeat)
         $("shell").append($("combos"), $("keys"), $("kbd"))
-        $("panes").replaceChildren()
+        $("panes").replaceChildren($("pane-drop"))
+        placer.disconnect()
+        layout.n = 0
         $("split").hidden = true
+        document.querySelector("meta[name=theme-color]").content = "#2c2c2c"
         document.title = "Servers"
         history.replaceState(null, "", location.pathname)
         load()
@@ -3214,11 +3705,21 @@
 
       load().then(() => {
         const params = new URLSearchParams(location.search)
-        if (params.has("split")) return setPanes(Math.min(PANE_MAX, Math.max(1, +params.get("split") || 2)))
+        if (params.has("split")) {
+          const counts = params
+            .get("split")
+            .split("-")
+            .map((n) => Math.min(8, Math.max(1, +n || 1)))
+          return setPanes(counts.slice(0, PANE_MAX))
+        }
         const code = servers.find((s) => s.id === params.get("code"))
         if (code) return connect(code, "code", params.get("folder") || undefined)
         const sh = servers.find((s) => s.id === params.get("shell"))
-        if (sh) return shell(sh, {}, undefined, params.get("attach") || undefined)
+        // A new shell signs in first if it needs to.
+        if (sh) {
+          const attach = params.get("attach")
+          return attach ? shell(sh, {}, undefined, attach) : connect(sh, "shell", params.get("folder") || undefined)
+        }
         const fs = servers.find((s) => s.id === params.get("files"))
         if (fs) return files(fs, undefined, params.get("folder") || undefined)
         const s = servers.find((s) => s.id === params.get("connect"))
@@ -3230,6 +3731,8 @@
       setInterval(() => !document.hidden && loadStatus(), STATUS_INTERVAL)
       // Panes hide the widgets.
       if (!pane) {
+        loadUsage()
+        setInterval(() => !document.hidden && loadUsage(), 60000)
         loadSystem()
         setInterval(() => !document.hidden && loadSystem(), 3000)
       }

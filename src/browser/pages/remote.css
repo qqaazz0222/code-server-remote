@@ -1,16 +1,33 @@
 body {
   display: flex;
   flex-direction: column;
+  /* Grows with the page, so the sticky top bar stays up for all of it. */
+  height: auto;
   min-height: 100vh;
 }
 
+/* Status bar area (home screen app on a phone): solid, under the top bars. */
+html {
+  background: #1f1f1f;
+}
+
+/* Stays over the status bar area while the page scrolls, and no bounce shows the wallpaper above it. */
 .topbar {
   align-items: center;
-  background: rgba(44, 44, 44, 0.92);
+  background: #2c2c2c;
+  box-sizing: content-box;
   display: flex;
   height: 46px;
   justify-content: space-between;
-  padding: 0 16px 0 20px;
+  padding: env(safe-area-inset-top) 16px 0 20px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+html,
+body {
+  overscroll-behavior-y: none;
 }
 
 .topbar .brand {
@@ -1210,12 +1227,15 @@ body {
   --text-2: #cccccc;
   --text-3: #9d9d9d;
   --line: #2b2b2b;
-  background: #181818;
+  /* The status bar area takes the header's color. */
+  background: linear-gradient(#1f1f1f, #1f1f1f) top / 100% env(safe-area-inset-top) no-repeat #181818;
+  box-sizing: border-box;
   color: var(--text);
   display: flex;
   flex-direction: column;
   height: 100%;
   left: 0;
+  padding-top: env(safe-area-inset-top);
   position: fixed;
   right: 0;
   top: 0;
@@ -1228,37 +1248,10 @@ body {
   z-index: 11;
 }
 
-.shell-title {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .editor-frame {
   border: 0;
   flex: 1;
   width: 100%;
-}
-
-#shell-title {
-  background: transparent;
-  border: 0;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  padding: 4px 0;
-  text-align: left;
-}
-
-#shell-title:hover {
-  text-decoration: underline;
-}
-
-#shell-title:focus-visible {
-  outline: 2px solid var(--primary-soft);
-  outline-offset: 2px;
 }
 
 .shell[hidden] {
@@ -1716,7 +1709,8 @@ body:has(> .shell:not([hidden])) > :not(.shell, dialog, .toast) {
   display: flex;
   font-size: 0.875rem;
   gap: 8px;
-  padding: 6px 8px;
+  /* Name on the left, close last on the right, like the other headers. */
+  padding: 6px 8px 6px 16px;
 }
 
 .files-preview-head b {
@@ -1762,6 +1756,17 @@ body:has(> .shell:not([hidden])) > :not(.shell, dialog, .toast) {
   display: block;
   margin: 16px auto;
   max-width: calc(100% - 32px);
+}
+
+/* Zoomed by zoomable(); the browser's own pinch would zoom the whole page. */
+img.files-media {
+  cursor: zoom-in;
+  touch-action: pan-x pan-y;
+}
+
+img.files-media.zoomed {
+  cursor: grab;
+  touch-action: none;
 }
 
 iframe.files-media {
@@ -1927,13 +1932,360 @@ audio.files-media {
 .topbar-actions {
   display: flex;
   gap: 4px;
+  min-width: 0;
 }
 
-/* Split view: the panes share the width, stacked on phones. */
+/* AI usage: per account, a small bar for each limit window. */
+.usage-strip {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 0.75rem;
+  gap: 14px;
+  margin-right: auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: 4px 8px;
+}
+
+.icon-btn.rebuild[hidden] {
+  display: none;
+}
+
+.rebuild.busy {
+  pointer-events: none;
+}
+
+.rebuild.busy svg {
+  animation: spin 1s linear infinite;
+}
+
+.usage-strip:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.usage-strip[hidden] {
+  display: none;
+}
+
+.usage-acct {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.usage-acct.stale {
+  opacity: 0.5;
+}
+
+.usage-acct b {
+  font-weight: 500;
+}
+
+.usage-win {
+  align-items: center;
+  color: #9d9d9d;
+  display: flex;
+  gap: 4px;
+}
+
+.usage-win.mid {
+  color: #cca700;
+}
+
+.usage-win.high {
+  color: var(--danger);
+}
+
+.usage-bar {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 2px;
+  height: 4px;
+  overflow: hidden;
+  position: relative;
+  width: 28px;
+}
+
+.usage-bar::before {
+  background: var(--primary);
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: var(--left);
+}
+
+.usage-bar.mid::before {
+  background: #cca700;
+}
+
+.usage-bar.high::before {
+  background: var(--danger);
+}
+
+/* Phones: short names and percentages, only in the tab view's bar. */
+@media (max-width: 600px) {
+  .usage-strip {
+    gap: 10px;
+  }
+
+  .usage-acct {
+    gap: 4px;
+  }
+
+  .usage-acct b {
+    max-width: 8ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .usage-bar {
+    display: none;
+  }
+
+  .topbar .usage-strip {
+    display: none;
+  }
+}
+
+.usage-form {
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.4fr) auto;
+}
+
+/* The dialog: one card per account, a meter per window. */
+#usage-list {
+  gap: 8px;
+  max-height: 60vh;
+}
+
+.usage-card {
+  background: var(--l-bg);
+  border: 1px solid var(--l-line);
+  border-radius: 10px;
+  color: var(--l-text);
+  display: grid;
+  gap: 12px;
+  padding: 10px 6px 14px 14px;
+}
+
+.usage-card.stale .usage-row {
+  opacity: 0.5;
+}
+
+.usage-card-head {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.usage-card-head span {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.usage-card-head b {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.usage-card small {
+  color: var(--l-text-2);
+  font-size: 0.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-card-head .icon-btn {
+  color: var(--l-text-3);
+  flex: none;
+}
+
+.usage-card-head .icon-btn:hover {
+  color: var(--danger);
+}
+
+.usage-row {
+  align-items: baseline;
+  display: grid;
+  gap: 4px 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-right: 8px;
+}
+
+.usage-row-name {
+  color: var(--l-text-2);
+  font-size: 0.8rem;
+}
+
+.usage-row b {
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.usage-meter {
+  background: var(--l-line);
+  border-radius: 3px;
+  grid-column: 1 / -1;
+  height: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+.usage-meter::before {
+  background: var(--primary);
+  content: "";
+  inset: 0 auto 0 0;
+  position: absolute;
+  width: var(--left);
+}
+
+.usage-meter.mid::before {
+  background: #cca700;
+}
+
+.usage-meter.high::before {
+  background: var(--danger);
+}
+
+.usage-row small {
+  grid-column: 1 / -1;
+}
+
+.usage-note {
+  color: var(--l-text-2);
+  font-size: 0.75rem;
+  margin: 10px 2px 0;
+}
+
+/* Split view: the groups share the width, stacked on phones. */
 .panes {
   display: flex;
   flex: 1;
   min-height: 0;
+  position: relative;
+}
+
+.pane-group {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.pane-body {
+  background: #181818;
+  flex: 1;
+  min-height: 0;
+}
+
+.pane-tabs {
+  background: #1f1f1f;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex: none;
+  height: 34px;
+  overflow: hidden;
+}
+
+.pane-tab {
+  align-items: center;
+  border-right: 1px solid var(--line);
+  color: #9d9d9d;
+  display: flex;
+  flex: 0 1 auto;
+  font-size: 0.8125rem;
+  min-width: 56px;
+  /* Pointer drags move tabs, also on touch screens. */
+  touch-action: none;
+}
+
+.pane-tab.active {
+  background: #181818;
+  box-shadow: inset 0 1px var(--primary);
+  color: inherit;
+}
+
+.pane-tab.dragged {
+  opacity: 0.5;
+}
+
+.pane-tab-label {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  max-width: 180px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 4px 0 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pane-tab .icon-btn,
+.pane-tab-add {
+  flex: none;
+  height: 28px;
+  width: 28px;
+}
+
+.pane-tab .icon-btn svg,
+.pane-tab-add svg {
+  height: 14px;
+  width: 14px;
+}
+
+.pane-tab-add {
+  align-self: center;
+}
+
+.pane-tab-edit[hidden] {
+  display: none;
+}
+
+/* Only buttons, on the right. */
+#split > .shell-head {
+  justify-content: flex-end;
+}
+
+.split.no-shell #font-down,
+.split.no-shell #font-up {
+  display: none;
+}
+
+/* Laid over their group's body; see placeFrames. */
+.pane-frame {
+  position: absolute;
+}
+
+/* Where a dragged tab would go. */
+.pane-drop {
+  background: color-mix(in srgb, var(--primary) 25%, transparent);
+  outline: 1px solid var(--primary);
+  outline-offset: -1px;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.panes.dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.panes.dragging iframe {
+  pointer-events: none;
 }
 
 .pane-divider {
@@ -1964,9 +2316,6 @@ audio.files-media {
 .pane-frame {
   background: #181818;
   border: 0;
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
 }
 
 .pane-frame:focus {
@@ -2035,11 +2384,6 @@ audio.files-media {
 .pane-frame.typing {
   outline: 1px solid var(--primary);
   outline-offset: -1px;
-}
-
-#split-add:disabled {
-  cursor: default;
-  opacity: 0.35;
 }
 
 .picker-top {

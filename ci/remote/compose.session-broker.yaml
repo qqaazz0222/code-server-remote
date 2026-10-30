@@ -1,0 +1,36 @@
+# Overlay for the Docker deployment described in docs/README.md.
+# Paths are relative to the base compose.yaml. Keep the broker image pinned
+# when updating only the launcher; replacing the broker ends its sessions.
+services:
+  code-server:
+    image: code-server-remote:2026.10.3
+    environment:
+      CSR_SESSION_BROKER: "1"
+      CSR_SESSION_BROKER_EXTERNAL: "1"
+    depends_on:
+      session-broker:
+        condition: service_healthy
+  session-broker:
+    image: code-server-remote:2026.10.3
+    user: "1000:1000"
+    network_mode: host
+    restart: unless-stopped
+    init: true
+    entrypoint:
+      - /usr/lib/code-server/lib/node
+      - /usr/lib/code-server/out/node/sessionBrokerWorker.js
+    command: ["--user-data-dir", "/home/coder/.local/share/code-server"]
+    volumes:
+      - /workspace:/workspace
+      - ./data:/home/coder/.local/share/code-server
+      - ~/.ssh:/home/coder/.ssh
+    healthcheck:
+      test:
+        - CMD
+        - /usr/lib/code-server/lib/node
+        - -e
+        - "require('/usr/lib/code-server/out/node/sessionBroker').brokerHealth('/home/coder/.local/share/code-server/session-broker/broker.sock').then(h=>process.exit(h?0:1)).catch(()=>process.exit(1))"
+      interval: 3s
+      timeout: 2s
+      retries: 15
+      start_period: 3s

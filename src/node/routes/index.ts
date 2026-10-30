@@ -12,6 +12,7 @@ import { AuthType, DefaultedArgs } from "../cli"
 import { rootPath } from "../constants"
 import { Heart } from "../heart"
 import { redirect } from "../http"
+import { brokerHttp, brokerRoutes, brokerWebsocket, ensureSessionBroker } from "../sessionBroker"
 import { CoderSettings, SettingsProvider } from "../settings"
 import { UpdateProvider } from "../update"
 import { getMediaMime, paths } from "../util"
@@ -134,6 +135,13 @@ export const register = async (
     })
   })
 
+  // Opt-in for development: session ownership survives launcher restarts.
+  if (process.env.CSR_SESSION_BROKER === "1") {
+    const socket = await ensureSessionBroker(args)
+    app.router.all(brokerRoutes, (req, res) => brokerHttp(socket, req, res))
+    app.wsRouter.get(brokerRoutes, (req) => brokerWebsocket(socket, req as WebsocketRequest))
+  }
+
   // SSH remote servers (before the body parsers so bodies are proxied intact).
   app.router.all("/remote/:id{/*path}", async (req, res) => {
     await remote.proxy(req, res)
@@ -181,7 +189,7 @@ export const register = async (
 
   // Server list at the root; the local editor stays at /vscode.
   app.router.use("/", remote.router)
-  remote.startUptime({ args })
+  if (process.env.CSR_SESSION_BROKER !== "1") remote.startUptime({ args })
 
   // For historic reasons we also load at /vscode because the root was replaced
   // by a plugin in v1 of Coder.  The plugin system (which was for internal use
